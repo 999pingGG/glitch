@@ -2,6 +2,32 @@
 #ifndef _GLITCH_H_
 #define _GLITCH_H_
 #include <cvkm.h>
+
+#ifdef GLI_WINDOWS
+// Window's OpenGL header is ancient (version 1.1).
+// So we need to provide some stuff here by ourselves.
+#define WIN32_LEAN_AND_MEAN
+#define VC_EXTRALEAN
+#include <Windows.h>
+
+typedef char GLchar;
+typedef intptr_t GLsizeiptr;
+
+#define WGL_CONTEXT_MAJOR_VERSION_ARB 0x2091
+#define WGL_CONTEXT_MINOR_VERSION_ARB 0x2092
+#define WGL_CONTEXT_PROFILE_MASK_ARB 0x9126
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB 0x00000001
+
+#define GL_VERTEX_SHADER 0x8B31
+#define GL_FRAGMENT_SHADER 0x8B30
+#define GL_STATIC_DRAW 0x88E4
+#define GL_LINK_STATUS 0x8B82
+#define GL_COMPILE_STATUS 0x8B81
+#define GL_ARRAY_BUFFER 0x8892
+#define GL_ACTIVE_UNIFORM_MAX_LENGTH 0x8B87
+#define GL_ACTIVE_UNIFORMS 0x8B86
+#endif
+
 #include <GL/gl.h>
 
 #define GLI_COUNTOF(array) (sizeof(array) / sizeof(array[0]))

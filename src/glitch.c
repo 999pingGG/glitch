@@ -1,4 +1,14 @@
+// Before anything happens at all, the Windows API needs a crash course in staying out of the way...
+#ifdef GLI_WINDOWS
+#define WIN32_LEAN_AND_MEAN
+#define VC_EXTRALEAN
+#define _CRT_NONSTDC_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_DEPRECATE
+#endif
+
 #include <assert.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 #define CVKM_RH_NO
@@ -13,7 +23,7 @@
 #include <GL/gl.h>
 #include <GL/glx.h>
 
-typedef GLXContext (* glXCreateContextAttribsARBProc)(
+typedef GLXContext (*glXCreateContextAttribsARBProc)(
   Display* display,
   GLXFBConfig config,
   GLXContext share_context,
@@ -21,8 +31,32 @@ typedef GLXContext (* glXCreateContextAttribsARBProc)(
   const int* attrib_list
 );
 
+static GLXContext context;
 static Display* display;
 static Window window;
+#elif defined(GLI_WINDOWS)
+typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC)(
+  HDC device_context_handle,
+  HGLRC gl_rendering_context_handle,
+  const int* attribute_list
+);
+
+static HGLRC context;
+static HWND window_handle;
+static HDC device_context_handle;
+
+static LRESULT CALLBACK window_proc(HWND handle, UINT message, WPARAM w_param, LPARAM l_param) {
+  switch (message) {
+    case WM_CLOSE:
+    case WM_DESTROY:
+      PostQuitMessage(0);
+      return 0;
+    default:
+      return DefWindowProc(handle, message, w_param, l_param);
+  }
+}
+#else
+#error Unsupported platform.
 #endif
 
 typedef GLuint (*glCreateShaderProc)(GLenum shaderType);
@@ -247,7 +281,7 @@ static void CompileShaders(ecs_iter_t* it) {
     }
 
     GLint max_length;
-    glGetProgramiv(shader_program.program,  GL_ACTIVE_UNIFORM_MAX_LENGTH, &max_length);
+    glGetProgramiv(shader_program.program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &max_length);
     char* name_buffer = malloc(max_length);
 
     glGetProgramiv(shader_program.program, GL_ACTIVE_UNIFORMS, &shader_program.uniforms_count);
@@ -284,7 +318,20 @@ static GLint get_uniform_location(const ShaderProgram* program, const char* unif
 }
 
 static void PreRenderFrame(ecs_iter_t* it) {
-  (void)it;
+#ifdef GLI_LINUX
+  // TODO: Call ecs_quit on window close.
+#else
+  MSG message;
+  while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
+    if (message.message == WM_QUIT) {
+      ecs_quit(it->world);
+      break;
+    }
+    TranslateMessage(&message);
+    DispatchMessage(&message);
+  }
+#endif
+
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
@@ -336,21 +383,47 @@ static void PostRenderFrame(ecs_iter_t* it) {
   (void)it;
 #ifdef GLI_LINUX
   glXSwapBuffers(display, window);
+#else
+  SwapBuffers(device_context_handle);
 #endif
 }
 
+#ifdef GLI_LINUX
+#define gli_get_proc_address(fun) glXGetProcAddressARB((const GLubyte*)#fun)
+#else
+#define gli_get_proc_address(fun) wglGetProcAddress((LPCSTR)#fun)
+#endif
+
 #define GLI_LOAD_PROC_ADDRESS(fun) do {\
-  fun = (fun##Proc)glXGetProcAddressARB((const GLubyte*)#fun);\
+  fun = (fun##Proc)gli_get_proc_address(fun);\
   if (!fun){\
     fprintf(stderr, "Failed to load "#fun"\n");\
     return;\
   }\
-} while (0)
+} while (false)
+
+static void fini(ecs_world_t* world, void* unused) {
+  (void)world;
+  (void)unused;
+#ifdef GLI_LINUX
+  glXMakeCurrent(display, None, NULL);
+  glXDestroyContext(display, context);
+  XDestroyWindow(display, window);
+  XCloseDisplay(display);
+#else
+  wglMakeCurrent(NULL, NULL);
+  wglDeleteContext(context);
+  ReleaseDC(window_handle, device_context_handle);
+  DestroyWindow(window_handle);
+#endif
+}
 
 void GLitchImport(ecs_world_t* world) {
   ECS_MODULE(world, GLitch);
 
   ECS_IMPORT(world, cvkm);
+
+  ecs_atfini(world, fini, NULL);
 
   ECS_COMPONENT_DEFINE(world, MeshData);
   ECS_COMPONENT_DEFINE(world, Mesh);
@@ -372,6 +445,8 @@ void GLitchImport(ecs_world_t* world) {
   GLI_SET_HOOKS(Mesh);
   GLI_SET_HOOKS(ShaderProgramSource);
   GLI_SET_HOOKS(ShaderProgram);
+
+  static const char* window_name = "GLitch";
 
 #ifdef GLI_LINUX
   display = XOpenDisplay(NULL);
@@ -442,7 +517,7 @@ void GLitchImport(ecs_world_t* world) {
     return;
   }
 
-  XStoreName(display, window, "GLitch");
+  XStoreName(display, window, window_name);
   XMapWindow(display, window);
 
   // Get the pointer to glXCreateContextAttribsARB for modern context creation
@@ -455,7 +530,7 @@ void GLitchImport(ecs_world_t* world) {
   }
 
   // Create a OpenGL context version 3.3
-  GLXContext ctx = glXCreateContextAttribsARB(
+  context = glXCreateContextAttribsARB(
     display,
     best_config,
     0,
@@ -468,13 +543,111 @@ void GLitchImport(ecs_world_t* world) {
       None,
     }
   );
-  if (!ctx) {
+  if (!context) {
     fprintf(stderr, "Failed to create OpenGL 3.3 context.\n");
     return;
   }
 
   // Make the context current
-  glXMakeCurrent(display, window, ctx);
+  glXMakeCurrent(display, window, context);
+#else
+  static const char* class_name = "GLitchWindowClass";
+
+  if (!RegisterClass(
+    &(WNDCLASS) {
+      .style = CS_OWNDC,
+      .lpfnWndProc = window_proc,
+      .hInstance = GetModuleHandle(NULL),
+      .hCursor = LoadCursor(NULL, IDC_ARROW),
+      .lpszClassName = class_name,
+    }
+  )) {
+    MessageBox(NULL, "Failed to register window class.", "Error", MB_OK);
+    return;
+  }
+
+  window_handle = CreateWindowEx(
+    0,
+    class_name,
+    window_name,
+    WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+    CW_USEDEFAULT,
+    CW_USEDEFAULT,
+    800,
+    600,
+    NULL,
+    NULL,
+    GetModuleHandle(NULL),
+    NULL
+  );
+  if (!window_handle) {
+    MessageBox(NULL, "Failed to create window.", "Error", MB_OK);
+    return;
+  }
+
+  device_context_handle = GetDC(window_handle);
+
+  // Set up the pixel format descriptor.
+  const PIXELFORMATDESCRIPTOR pixel_format_descriptor = {
+    .nSize = sizeof(PIXELFORMATDESCRIPTOR),
+    .nVersion = 1,
+    .dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+    .iPixelType = PFD_TYPE_RGBA,
+    .cColorBits = 32,
+    .cDepthBits = 24,
+    .cStencilBits = 0,
+    .iLayerType = PFD_MAIN_PLANE,
+  };
+
+  const int pixel_format = ChoosePixelFormat(device_context_handle, &pixel_format_descriptor);
+  if (pixel_format == 0) {
+    MessageBox(NULL, "Failed to choose pixel format.", "Error", MB_OK);
+    return;
+  }
+
+  if (!SetPixelFormat(device_context_handle, pixel_format, &pixel_format_descriptor)) {
+    MessageBox(NULL, "Failed to set pixel format.", "Error", MB_OK);
+    return;
+  }
+
+  const HGLRC dummy_context_handle = wglCreateContext(device_context_handle);
+  if (!dummy_context_handle) {
+    MessageBox(NULL, "Failed to create dummy OpenGL context.", "Error", MB_OK);
+    return;
+  }
+
+  if (!wglMakeCurrent(device_context_handle, dummy_context_handle)) {
+    MessageBox(NULL, "Failed to activate dummy OpenGL context.", "Error", MB_OK);
+    return;
+  }
+
+  const PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB =
+    (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress("wglCreateContextAttribsARB");
+
+  if (!wglCreateContextAttribsARB) {
+    MessageBox(NULL, "Failed to get the address of wglCreateContextAttribsARB", "Error", MB_OK);
+    return;
+  }
+
+  context = wglCreateContextAttribsARB(
+    device_context_handle,
+    0,
+    (int[]) {
+      WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+      WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+      WGL_CONTEXT_PROFILE_MASK_ARB,
+      WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+      0,
+    }
+  );
+
+  if (!context) {
+    MessageBox(NULL, "Failed to create OpenGL 3.3 context.", "Error", MB_OK);
+    return;
+  }
+
+  wglMakeCurrent(device_context_handle, context);
+  wglDeleteContext(dummy_context_handle);
 #endif
 
   GLI_LOAD_PROC_ADDRESS(glCreateShader);
