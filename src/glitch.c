@@ -307,7 +307,7 @@ static void CompileShaders(ecs_iter_t* it) {
       glGetActiveUniform(shader_program.program, j, max_length, &length, &size, &type, name_buffer);
       shader_program.uniforms[j] = (gli_uniform) {
         .name = strdup(name_buffer),
-        .location = j,
+        .location = glGetUniformLocation(shader_program.program, name_buffer),
       };
     }
 
@@ -380,7 +380,10 @@ static void RenderFrame(ecs_iter_t* it) {
   vkm_ortho(-half_width, half_width, -half_height, half_height, -1000.f, 1000.f, &view_projection_matrix);
 
   // Apply view.
-  vkm_translate(&view_projection_matrix, (&(vkm_vec2){ { -camera->position.x, -camera->position.y } }));
+  {
+    const vkm_vec2 offset = (vkm_vec2){ { -camera->position.x, -camera->position.y } };
+    vkm_translate(&view_projection_matrix, &offset);
+  }
 
   glUseProgram(shader_program->program);
   const GLint view_projection_matrix_location = get_uniform_location(shader_program, "view_projection_matrix");
@@ -412,6 +415,11 @@ static void PostRenderFrame(ecs_iter_t* it) {
 #else
   SwapBuffers(device_context_handle);
 #endif
+
+  GLenum error;
+  while ((error = glGetError()) != GL_NO_ERROR) {
+    fprintf(stderr, "OpenGL error 0x%x\n", error);
+  }
 }
 
 #ifdef GLI_LINUX
