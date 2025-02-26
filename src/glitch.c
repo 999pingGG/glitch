@@ -13,7 +13,6 @@
 
 #define CVKM_NO
 #define CVKM_ENABLE_FLECS
-#define CVKM_FLECS_IMPLEMENTATION
 #include <cvkm.h>
 #include <flecs.h>
 #include <glitch.h>
