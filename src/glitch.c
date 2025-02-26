@@ -11,7 +11,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define CVKM_RH_NO
+#define CVKM_NO
+#define CVKM_ENABLE_FLECS
 #define CVKM_FLECS_IMPLEMENTATION
 #include <cvkm.h>
 #include <flecs.h>
@@ -58,6 +59,10 @@ static LRESULT CALLBACK window_proc(HWND handle, UINT message, WPARAM w_param, L
 #else
 #error Unsupported platform.
 #endif
+
+// Hardcoded for now.
+#define GLI_WIDTH 800
+#define GLI_HEIGHT 600
 
 typedef GLuint (*glCreateShaderProc)(GLenum shaderType);
 static glCreateShaderProc glCreateShader;
@@ -129,6 +134,8 @@ ECS_COMPONENT_DECLARE(MeshData);
 ECS_COMPONENT_DECLARE(Mesh);
 ECS_COMPONENT_DECLARE(ShaderProgramSource);
 ECS_COMPONENT_DECLARE(ShaderProgram);
+ECS_COMPONENT_DECLARE(Camera2D);
+
 ECS_TAG_DECLARE(Uses);
 
 ECS_CTOR(MeshData, ptr, {
@@ -198,6 +205,13 @@ ECS_DTOR(ShaderProgram, ptr, {
   free(ptr->uniforms);
   glDeleteProgram(ptr->program);
   *ptr = (ShaderProgram){ 0 };
+})
+
+ECS_CTOR(Camera2D, ptr, {
+  *ptr = (Camera2D){
+    .position = CVKM_VEC2_ZERO,
+    .zoom = 1.0f,
+  };
 })
 
 static GLuint compile_shader(const GLenum type, const char* source) {
@@ -318,6 +332,7 @@ static GLint get_uniform_location(const ShaderProgram* program, const char* unif
 }
 
 static void PreRenderFrame(ecs_iter_t* it) {
+  (void)it;
 #ifdef GLI_LINUX
   // TODO: Call ecs_quit on window close.
 #else
@@ -339,16 +354,21 @@ static void RenderFrame(ecs_iter_t* it) {
   const Position* positions = ecs_field(it, Position, 0);
   const Mesh* mesh = ecs_field(it, Mesh, 3);
   const ShaderProgram* shader_program = ecs_field(it, ShaderProgram, 4);
+  const Camera2D* camera = ecs_field(it, Camera2D, 5);
 
   assert(!ecs_field_is_self(it, 3));
   assert(!ecs_field_is_self(it, 4));
+  assert(!ecs_field_is_self(it, 5));
 
+  const float zoom_factor = 1.0f / camera->zoom;
+  const float half_width = GLI_WIDTH * 0.5f * zoom_factor;
+  const float half_height = GLI_HEIGHT * 0.5f * zoom_factor;
   vkm_mat4 view_projection_matrix;
-  // Apply projection. Hardcoded for now.
-  vkm_ortho(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, &view_projection_matrix);
+  // Apply projection.
+  vkm_ortho(-half_width, half_width, -half_height, half_height, -1000.f, 1000.f, &view_projection_matrix);
 
-  // Apply view. (0, 0, -0.5) hardcoded for now.
-  view_projection_matrix.m32 = -0.5f;
+  // Apply view.
+  vkm_translate(&view_projection_matrix, (&(vkm_vec2){ { -camera->position.x, -camera->position.y } }));
 
   glUseProgram(shader_program->program);
   const GLint view_projection_matrix_location = get_uniform_location(shader_program, "view_projection_matrix");
@@ -363,14 +383,8 @@ static void RenderFrame(ecs_iter_t* it) {
     if (model_matrix_location >= 0) {
       const Position* position = positions + i;
 
-      // @formatter:off
-      const vkm_mat4 model_matrix = (vkm_mat4){ .raw = {
-        1.0f, 0.0f, 0.0f, position->x,
-        0.0f, 1.0f, 0.0f, position->y,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f,
-      } };
-      // @formatter:on
+      vkm_mat4 model_matrix = CVKM_MAT4_IDENTITY;
+      vkm_translate(&model_matrix, position);
 
       glUniformMatrix4fv(model_matrix_location, 1, GL_FALSE, (const GLfloat*)model_matrix.raw);
     }
@@ -418,8 +432,8 @@ static void fini(ecs_world_t* world, void* unused) {
 #endif
 }
 
-void GLitchImport(ecs_world_t* world) {
-  ECS_MODULE(world, GLitch);
+void glitchImport(ecs_world_t* world) {
+  ECS_MODULE(world, glitch);
 
   ECS_IMPORT(world, cvkm);
 
@@ -429,6 +443,8 @@ void GLitchImport(ecs_world_t* world) {
   ECS_COMPONENT_DEFINE(world, Mesh);
   ECS_COMPONENT_DEFINE(world, ShaderProgramSource);
   ECS_COMPONENT_DEFINE(world, ShaderProgram);
+  ECS_COMPONENT_DEFINE(world, Camera2D);
+
   ECS_TAG_DEFINE(world, Uses);
 
 #define GLI_SET_HOOKS(component) ecs_set_hooks(\
@@ -445,6 +461,7 @@ void GLitchImport(ecs_world_t* world) {
   GLI_SET_HOOKS(Mesh);
   GLI_SET_HOOKS(ShaderProgramSource);
   GLI_SET_HOOKS(ShaderProgram);
+  ecs_set_hooks(world, Camera2D, { .ctor = ecs_ctor(Camera2D) });
 
   static const char* window_name = "GLitch";
 
@@ -503,7 +520,7 @@ void GLitchImport(ecs_world_t* world) {
   window = XCreateWindow(
     display,
     RootWindow(display, visual_info->screen),
-    0, 0, 800, 600, 0,
+    0, 0, GLI_WIDTH, GLI_HEIGHT, 0,
     visual_info->depth,
     InputOutput,
     visual_info->visual,
@@ -573,8 +590,8 @@ void GLitchImport(ecs_world_t* world) {
     WS_OVERLAPPEDWINDOW | WS_VISIBLE,
     CW_USEDEFAULT,
     CW_USEDEFAULT,
-    800,
-    600,
+    GLI_WIDTH,
+    GLI_HEIGHT,
     NULL,
     NULL,
     GetModuleHandle(NULL),
@@ -684,7 +701,8 @@ void GLitchImport(ecs_world_t* world) {
     [none] (Uses, $mesh),
     [none] (Uses, $shader_program),
     [in] Mesh($mesh),
-    [in] ShaderProgram($shader_program)
+    [in] ShaderProgram($shader_program),
+    [in] Camera2D(Camera2D),
   );
   ECS_SYSTEM(world, PostRenderFrame, EcsPostFrame, 0);
 

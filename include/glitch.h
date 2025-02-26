@@ -1,6 +1,7 @@
 #pragma once
 #ifndef _GLITCH_H_
 #define _GLITCH_H_
+#define CVKM_NO
 #include <cvkm.h>
 
 #ifdef GLI_WINDOWS
@@ -58,11 +59,18 @@ typedef struct ShaderProgram {
   GLuint program;
 } ShaderProgram;
 
+typedef struct Camera2D {
+  Position position;
+  float zoom;
+} Camera2D;
+
 extern ECS_COMPONENT_DECLARE(MeshData);
 extern ECS_COMPONENT_DECLARE(Mesh);
 extern ECS_COMPONENT_DECLARE(ShaderProgramSource);
 extern ECS_COMPONENT_DECLARE(ShaderProgram);
+extern ECS_COMPONENT_DECLARE(Camera2D);
+
 extern ECS_TAG_DECLARE(Uses);
 
-void GLitchImport(ecs_world_t* world);
+void glitchImport(ecs_world_t* world);
 #endif

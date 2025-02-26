@@ -41,6 +41,5 @@ elseif(WIN32)
   target_compile_definitions(tests PRIVATE GLI_WINDOWS)
   target_link_libraries(tests PRIVATE Opengl32)
 endif()
-target_compile_definitions(tests PRIVATE CVKM_ENABLE_FLECS)
 
 target_include_directories(tests PRIVATE include libs/flecs libs/cvkm)

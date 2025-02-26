@@ -7,8 +7,8 @@ framebuffer. Compiles absolutely warning-free. More documentation coming soon.
 A C11 compiler, [Flecs](https://www.flecs.dev/flecs/) and [cvkm](https://github.com/999pingGG/cvkm). The tests need CMake, but they are easy to
 compile without it.
 
-## Installation
-Copy `glitch.h` and `glitch.c` to your project. Done!
+## Installation and building
+Copy `glitch.h` and `glitch.c` to your project. Link against `X11` and `GL` in Linux and against `Opengl32` in Windows.
 
 ## Testing
 Do a standard CMake build to build the tests.
