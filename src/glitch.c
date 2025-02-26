@@ -135,6 +135,7 @@ ECS_COMPONENT_DECLARE(Mesh);
 ECS_COMPONENT_DECLARE(ShaderProgramSource);
 ECS_COMPONENT_DECLARE(ShaderProgram);
 ECS_COMPONENT_DECLARE(Camera2D);
+ECS_COMPONENT_DECLARE(Camera3D);
 
 ECS_TAG_DECLARE(Uses);
 
@@ -211,6 +212,13 @@ ECS_CTOR(Camera2D, ptr, {
   *ptr = (Camera2D){
     .position = CVKM_VEC2_ZERO,
     .zoom = 1.0f,
+  };
+})
+
+ECS_CTOR(Camera3D, ptr, {
+  *ptr = (Camera3D){
+    .position = CVKM_VEC3_ZERO,
+    .field_of_view = 80.0f,
   };
 })
 
@@ -362,26 +370,43 @@ static void PreRenderFrame(ecs_iter_t* it) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-static void RenderFrame(ecs_iter_t* it) {
-  const Position* positions = ecs_field(it, Position, 0);
+static void render(ecs_iter_t* it, const bool is_2d) {
+  const void* positions = ecs_field_w_size(it, ecs_field_size(it, 0), 0);
   const Mesh* mesh = ecs_field(it, Mesh, 3);
   const ShaderProgram* shader_program = ecs_field(it, ShaderProgram, 4);
-  const Camera2D* camera = ecs_field(it, Camera2D, 5);
+  const void* camera = ecs_field_w_size(it, ecs_field_size(it, 5), 5);
 
   assert(!ecs_field_is_self(it, 3));
   assert(!ecs_field_is_self(it, 4));
   assert(!ecs_field_is_self(it, 5));
 
-  const float zoom_factor = 1.0f / camera->zoom;
-  const float half_width = GLI_WIDTH * 0.5f * zoom_factor;
-  const float half_height = GLI_HEIGHT * 0.5f * zoom_factor;
   vkm_mat4 view_projection_matrix;
-  // Apply projection.
-  vkm_ortho(-half_width, half_width, -half_height, half_height, -1000.f, 1000.f, &view_projection_matrix);
+  if (is_2d) {
+    // Apply projection.
+    const Camera2D* camera_2d = camera;
+    const float zoom_factor = 1.0f / camera_2d->zoom;
+    const float half_width = GLI_WIDTH * 0.5f * zoom_factor;
+    const float half_height = GLI_HEIGHT * 0.5f * zoom_factor;
+    vkm_orthogonal(-half_width, half_width, -half_height, half_height, -1000.f, 1000.f, &view_projection_matrix);
 
-  // Apply view.
-  {
-    const vkm_vec2 offset = (vkm_vec2){ { -camera->position.x, -camera->position.y } };
+    // Apply view.
+    vkm_vec2 offset;
+    vkm_invert(&camera_2d->position, &offset);
+    vkm_translate(&view_projection_matrix, &offset);
+  } else {
+    // Apply projection.
+    const Camera3D* camera_3d = camera;
+    vkm_perspective(
+      camera_3d->field_of_view,
+      (float)GLI_WIDTH / GLI_HEIGHT,
+      camera_3d->near_plane,
+      camera_3d->far_plane,
+      &view_projection_matrix
+    );
+
+    // Apply view.
+    vkm_vec3 offset;
+    vkm_invert(&camera_3d->position, &offset);
     vkm_translate(&view_projection_matrix, &offset);
   }
 
@@ -396,16 +421,29 @@ static void RenderFrame(ecs_iter_t* it) {
   for (int i = 0; i < it->count; i++) {
     const GLint model_matrix_location = get_uniform_location(shader_program, "model_matrix");
     if (model_matrix_location >= 0) {
-      const Position* position = positions + i;
-
       vkm_mat4 model_matrix = CVKM_MAT4_IDENTITY;
-      vkm_translate(&model_matrix, position);
+
+      if (is_2d) {
+        const Position2D* position = (Position2D*)positions + i;
+        vkm_translate(&model_matrix, position);
+      } else {
+        const Position3D* position = (Position3D*)positions + i;
+        vkm_translate(&model_matrix, position);
+      }
 
       glUniformMatrix4fv(model_matrix_location, 1, GL_FALSE, (const GLfloat*)model_matrix.raw);
     }
 
     glDrawArrays(GL_TRIANGLES, 0, mesh->vertices_count);
   }
+}
+
+static void Render2D(ecs_iter_t* it) {
+  render(it, true);
+}
+
+static void Render3D(ecs_iter_t* it) {
+  render(it, false);
 }
 
 static void PostRenderFrame(ecs_iter_t* it) {
@@ -464,6 +502,7 @@ void glitchImport(ecs_world_t* world) {
   ECS_COMPONENT_DEFINE(world, ShaderProgramSource);
   ECS_COMPONENT_DEFINE(world, ShaderProgram);
   ECS_COMPONENT_DEFINE(world, Camera2D);
+  ECS_COMPONENT_DEFINE(world, Camera3D);
 
   ECS_TAG_DEFINE(world, Uses);
 
@@ -482,6 +521,7 @@ void glitchImport(ecs_world_t* world) {
   GLI_SET_HOOKS(ShaderProgramSource);
   GLI_SET_HOOKS(ShaderProgram);
   ecs_set_hooks(world, Camera2D, { .ctor = ecs_ctor(Camera2D) });
+  ecs_set_hooks(world, Camera3D, { .ctor = ecs_ctor(Camera3D) });
 
   static const char* window_name = "GLitch";
 
@@ -723,13 +763,21 @@ void glitchImport(ecs_world_t* world) {
   ECS_SYSTEM(world, MakeMeshes, EcsOnLoad, [in] MeshData, [out] !Mesh);
   ECS_SYSTEM(world, CompileShaders, EcsOnLoad, [in] ShaderProgramSource, [out] !ShaderProgram);
   ECS_SYSTEM(world, PreRenderFrame, EcsPreStore, 0);
-  ECS_SYSTEM(world, RenderFrame, EcsOnStore,
-    [in] cvkm.Position,
+  ECS_SYSTEM(world, Render2D, EcsOnStore,
+    [in] cvkm.Position2D,
     [none] (Uses, $mesh),
     [none] (Uses, $shader_program),
     [in] Mesh($mesh),
     [in] ShaderProgram($shader_program),
     [in] Camera2D(Camera2D),
+  );
+  ECS_SYSTEM(world, Render3D, EcsOnStore,
+    [in] cvkm.Position3D,
+    [none](Uses, $mesh),
+    [none](Uses, $shader_program),
+    [in] Mesh($mesh),
+    [in] ShaderProgram($shader_program),
+    [in] Camera3D(Camera3D),
   );
   ECS_SYSTEM(world, PostRenderFrame, EcsPostFrame, 0);
 

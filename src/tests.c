@@ -28,11 +28,11 @@ static void Age(ecs_iter_t* it) {
 }
 
 static void Move(ecs_iter_t* it) {
-  Position* positions = ecs_field(it, Position, 0);
+  Position2D* positions = ecs_field(it, Position2D, 0);
   const Lifetime* lifetimes = ecs_field(it, Lifetime, 1);
 
   for (int i = 0; i < it->count; i++) {
-    positions[i] = (Position){ { vkm_cos(lifetimes[i]) * 100.0f, vkm_sin(lifetimes[i]) * 100.0f } };
+    positions[i] = (Position2D){ { vkm_cos(lifetimes[i]) * 100.0f, vkm_sin(lifetimes[i]) * 100.0f } };
   }
 }
 
@@ -50,16 +50,16 @@ int main(const int argc, char** argv) {
   ecs_set_hooks(world, TimeScale, { .ctor = ecs_ctor(TimeScale) });
 
   ECS_SYSTEM(world, Age, EcsOnUpdate, [inout] Lifetime, [in] TimeScale);
-  ECS_SYSTEM(world, Move, EcsOnUpdate, [out] cvkm.Position, [in] Lifetime);
+  ECS_SYSTEM(world, Move, EcsOnUpdate, [out] cvkm.Position2D, [in] Lifetime);
 
   // Equilateral triangle
   static const vkm_vec2 triangle_vertices[] = {
-    { {  0.0f,  173.205081f } },
-    { { -100.0f, 0.0f } },
-    { {  100.0f, 0.0f } },
+    { {    0.0f, 173.205081f } },
+    { { -100.0f,   0.0f      } },
+    { {  100.0f,   0.0f      } },
   };
 
-  static const vkm_vec2 rectangle_vertices[] = {
+  static const vkm_vec2 square_vertices[] = {
     { { -100.0f,  100.0f } },
     { { -100.0f, -100.0f } },
     { {  100.0f, -100.0f } },
@@ -76,8 +76,8 @@ int main(const int argc, char** argv) {
 
   const ecs_entity_t rectangle_mesh = ecs_new(world);
   ecs_set(world, rectangle_mesh, MeshData, {
-    .vertices = rectangle_vertices,
-    .vertices_count = GLI_COUNTOF(rectangle_vertices),
+    .vertices = square_vertices,
+    .vertices_count = GLI_COUNTOF(square_vertices),
   });
 
   static const char* vertex_shader_source = "#version 330 core\n"
@@ -102,19 +102,32 @@ int main(const int argc, char** argv) {
     .fragment_shader = fragment_shader_source,
   });
 
-  const ecs_entity_t triangle_entity = ecs_new(world);
-  ecs_set(world, triangle_entity, Position, { 0 });
-  ecs_add(world, triangle_entity, Lifetime);
-  ecs_add(world, triangle_entity, TimeScale);
-  ecs_add_pair(world, triangle_entity, ecs_id(Uses), triangle_mesh);
-  ecs_add_pair(world, triangle_entity, ecs_id(Uses), shader_program);
+  ecs_entity(world, {
+    .name = "Triangle",
+    .add = (ecs_id_t[]){
+      ecs_id(TimeScale),
+      ecs_id(Position2D),
+      ecs_id(Lifetime),
+      ecs_pair(ecs_id(Uses), triangle_mesh),
+      ecs_pair(ecs_id(Uses), shader_program),
+      0,
+    },
+  });
 
-  const ecs_entity_t rectangle_entity = ecs_new(world);
-  ecs_set(world, rectangle_entity, Position, { 0 });
-  ecs_add(world, rectangle_entity, Lifetime);
-  ecs_set(world, rectangle_entity, TimeScale, { 2 });
-  ecs_add_pair(world, rectangle_entity, ecs_id(Uses), rectangle_mesh);
-  ecs_add_pair(world, rectangle_entity, ecs_id(Uses), shader_program);
+  ecs_entity(world, {
+    .name = "Square",
+    .add = (ecs_id_t[]){
+      ecs_id(Position2D),
+      ecs_id(Lifetime),
+      ecs_pair(ecs_id(Uses), rectangle_mesh),
+      ecs_pair(ecs_id(Uses), shader_program),
+      0,
+    },
+    .set = (ecs_value_t[]) {
+      { .type = ecs_id(TimeScale), .ptr = &(float){ 2.0f } },
+      0,
+    },
+  });
 
   ecs_singleton_add(world, Camera2D);
 

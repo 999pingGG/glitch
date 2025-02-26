@@ -18,6 +18,5 @@ Because I needed a dead simple library to quickly draw some stuff with Flecs.
 
 ## Roadmap
 - Document the components.
-- 3D support.
 - Vertex attributes other than a single vec2 position.
 - Quite a bit more stuff.

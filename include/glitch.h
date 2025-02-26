@@ -68,15 +68,21 @@ typedef struct ShaderProgram {
 } ShaderProgram;
 
 typedef struct Camera2D {
-  Position position;
+  Position2D position;
   float zoom;
 } Camera2D;
+
+typedef struct Camera3D {
+  Position3D position;
+  float field_of_view, near_plane, far_plane;
+} Camera3D;
 
 extern ECS_COMPONENT_DECLARE(MeshData);
 extern ECS_COMPONENT_DECLARE(Mesh);
 extern ECS_COMPONENT_DECLARE(ShaderProgramSource);
 extern ECS_COMPONENT_DECLARE(ShaderProgram);
 extern ECS_COMPONENT_DECLARE(Camera2D);
+extern ECS_COMPONENT_DECLARE(Camera3D);
 
 extern ECS_TAG_DECLARE(Uses);
 

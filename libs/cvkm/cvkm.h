@@ -327,6 +327,11 @@ CVKM_DEFINE_VEC4(ul, uint64_t);
 CVKM_DEFINE_VEC4(, float);
 CVKM_DEFINE_VEC4(d, double);
 
+typedef vkm_vec4 vkm_versor;
+typedef vkm_vec4 vkm_quat;
+
+#define CVKM_QUAT_IDENTITY ((vkm_quat){ { 0.0f, 0.0f, 0.0f, 1.0f } })
+
 typedef union vkm_mat4 {
   vkm_vec4 columns[4];
   struct {
@@ -1506,7 +1511,7 @@ CVKM_VEC4_LOGICAL_OPERATIONS(dvec4)
   vkm_dvec4*: vkm_dvec4_ge\
 )((a), (b))
 
-static void vkm_mat4_ortho_lh_zo(
+static void vkm_orthogonal_lh_zo(
   const float left,
   const float right,
   const float bottom,
@@ -1529,7 +1534,7 @@ static void vkm_mat4_ortho_lh_zo(
   // @formatter:on
 }
 
-static void vkm_ortho_lh_no(
+static void vkm_orthogonal_lh_no(
   const float left,
   const float right,
   const float bottom,
@@ -1552,7 +1557,7 @@ static void vkm_ortho_lh_no(
   // @formatter:on
 }
 
-static void vkm_ortho_rh_zo(
+static void vkm_orthogonal_rh_zo(
   const float left,
   const float right,
   const float bottom,
@@ -1575,7 +1580,7 @@ static void vkm_ortho_rh_zo(
   // @formatter:on
 }
 
-static void vkm_ortho_rh_no(
+static void vkm_orthogonal_rh_no(
   const float left,
   const float right,
   const float bottom,
@@ -1597,6 +1602,102 @@ static void vkm_ortho_rh_no(
   }};
   // @formatter:on
 }
+
+#ifdef CVKM_LH_ZO
+#define vkm_orthogonal vkm_orthogonal_lh_zo
+#elif defined(CVKM_LH_NO)
+#define vkm_orthogonal vkm_orthogonal_lh_no
+#elif defined(CVKM_RH_ZO)
+#define vkm_orthogonal vkm_orthogonal_rh_zo
+#elif defined(CVKM_RH_NO)
+#define vkm_orthogonal vkm_orthogonal_rh_no
+#endif
+
+static void vkm_perspective_lh_zo(
+  float field_of_view,
+  float aspect_ratio,
+  float near_plane,
+  float far_plane,
+  vkm_mat4* result
+) {
+  const float focal_length = 1.0f / vkm_tan(field_of_view * 0.5f);
+  const float depth_normalization_factor = 1.0f / (near_plane - far_plane);
+
+  *result = (vkm_mat4){
+    .m00 = focal_length / aspect_ratio,
+    .m11 = focal_length,
+    .m22 = -far_plane * depth_normalization_factor,
+    .m23 = 1.0f,
+    .m32 = near_plane * far_plane * depth_normalization_factor,
+  };
+}
+
+static void vkm_perspective_lh_no(
+  float field_of_view,
+  float aspect_ratio,
+  float near_plane,
+  float far_plane,
+  vkm_mat4* result
+) {
+  const float focal_length = 1.0f / vkm_tan(field_of_view * 0.5f);
+  const float depth_normalization_factor = 1.0f / (near_plane - far_plane);
+
+  *result = (vkm_mat4){
+    .m00 = focal_length / aspect_ratio,
+    .m11 = focal_length,
+    .m22 = -(near_plane + far_plane) * depth_normalization_factor,
+    .m23 = 1.0f,
+    .m32 = 2.0f * near_plane * far_plane * depth_normalization_factor,
+  };
+}
+
+static void vkm_perspective_rh_zo(
+  float field_of_view,
+  float aspect_ratio,
+  float near_plane,
+  float far_plane,
+  vkm_mat4* result
+) {
+  const float focal_length = 1.0f / vkm_tan(field_of_view * 0.5f);
+  const float depth_normalization_factor = 1.0f / (near_plane - far_plane);
+
+  *result = (vkm_mat4){
+    .m00 = focal_length / aspect_ratio,
+    .m11 = focal_length,
+    .m22 = far_plane * depth_normalization_factor,
+    .m23 = -1.0f,
+    .m32 = near_plane * far_plane * depth_normalization_factor,
+  };
+}
+
+static void vkm_perspective_rh_no(
+  float field_of_view,
+  float aspect_ratio,
+  float near_plane,
+  float far_plane,
+  vkm_mat4* result
+) {
+  const float focal_length = 1.0f / vkm_tan(field_of_view * 0.5f);
+  const float depth_normalization_factor = 1.0f / (near_plane - far_plane);
+
+  *result = (vkm_mat4){
+    .m00 = focal_length / aspect_ratio,
+    .m11 = focal_length,
+    .m22 = (near_plane + far_plane) * depth_normalization_factor,
+    .m23 = -1.0f,
+    .m32 = 2.0f * near_plane * far_plane * depth_normalization_factor,
+  };
+}
+
+#ifdef CVKM_LH_ZO
+#define vkm_perspective vkm_perspective_lh_zo
+#elif defined(CVKM_LH_NO)
+#define vkm_perspective vkm_perspective_lh_no
+#elif defined(CVKM_RH_ZO)
+#define vkm_perspective vkm_perspective_rh_zo
+#elif defined(CVKM_RH_NO)
+#define vkm_perspective vkm_perspective_rh_no
+#endif
 
 static void vkm_mat4_mul(const vkm_mat4* a, const vkm_mat4* b, vkm_mat4* result) {
   result->m00 = a->m00 * b->m00 + a->m10 * b->m01 + a->m20 * b->m02 + a->m30 * b->m03;
@@ -1717,72 +1818,62 @@ static void vkm_scale(vkm_mat4* matrix, const vkm_vec3* vector) {
   vkm_mul(matrix->columns + 2, vector->y, matrix->columns + 2);
 }
 
-#ifdef CVKM_LH_ZO
-#define vkm_ortho vkm_ortho_lh_zo
-#elif defined(CVKM_LH_NO)
-#define vkm_ortho vkm_ortho_lh_no
-#elif defined(CVKM_RH_ZO)
-#define vkm_ortho vkm_ortho_rh_zo
-#elif defined(CVKM_RH_NO)
-#define vkm_ortho vkm_ortho_rh_no
-#endif
+static void vkm_quat_to_mat4(const vkm_versor* versor, vkm_mat4* result) {
+  float scale_factor = vkm_vec4_magnitude(versor);
+  scale_factor = scale_factor > 0.0f ? 2.0f / scale_factor : 0.0f;
 
-typedef vkm_vec2 Position2;
-typedef vkm_vec3 Position3;
-typedef vkm_vec4 Position4;
-typedef vkm_dvec2 DoublePosition2;
-typedef vkm_dvec3 DoublePosition3;
-typedef vkm_dvec4 DoublePosition4;
+  const float xx = scale_factor * versor->x * versor->x;
+  const float yy = scale_factor * versor->y * versor->y;
+  const float zz = scale_factor * versor->z * versor->z;
+
+  const float xy = scale_factor * versor->x * versor->y;
+  const float yz = scale_factor * versor->y * versor->z;
+  const float xz = scale_factor * versor->x * versor->z;
+
+  const float wx = scale_factor * versor->w * versor->x;
+  const float wy = scale_factor * versor->w * versor->y;
+  const float wz = scale_factor * versor->w * versor->z;
+
+  result->m00 = 1.0f - yy - zz;
+  result->m11 = 1.0f - xx - zz;
+  result->m22 = 1.0f - xx - yy;
+
+  result->m01 = xy + wz;
+  result->m12 = yz + wx;
+  result->m20 = xz + wy;
+
+  result->m10 = xy - wz;
+  result->m21 = yz - wx;
+  result->m02 = xz - wy;
+
+  result->m03 = result->m13 = result->m23 = result->m30 = result->m31 = result->m32 = result->m33 = 1.0f;
+}
+
+typedef vkm_vec2 Position2D;
+typedef vkm_vec3 Position3D;
+typedef vkm_vec4 Position4D;
+typedef vkm_dvec2 DoublePosition2D;
+typedef vkm_dvec3 DoublePosition3D;
+typedef vkm_dvec4 DoublePosition4D;
 typedef vkm_mat4 Transform;
-typedef vkm_vec2 Velocity2;
-typedef vkm_vec3 Velocity3;
-typedef vkm_vec4 Velocity4;
+typedef vkm_vec2 Velocity2D;
+typedef vkm_vec3 Velocity3D;
+typedef vkm_vec4 Velocity4D;
 typedef float Mass;
 typedef float Damping;
 typedef float GravityScale;
 
-#ifdef CVKM_3D
-typedef Velocity3 Velocity;
-
-#ifdef CVKM_DOUBLE_PRECISION
-typedef DoublePosition3 Position;
-#else
-typedef Position3 Position;
-#endif
-
-#elif CVKM_4D
-typedef Velocity4 Velocity;
-
-#ifdef CVKM_DOUBLE_PRECISION
-typedef DoublePosition4 Position;
-#else
-typedef Position4 Position;
-#endif
-
-#else
-typedef Velocity2 Velocity;
-
-#ifdef CVKM_DOUBLE_PRECISION
-typedef DoublePosition2 Position;
-#else
-typedef Position2 Position;
-#endif
-
-#endif
-
 #ifdef CVKM_ENABLE_FLECS
-extern ECS_COMPONENT_DECLARE(Position2);
-extern ECS_COMPONENT_DECLARE(Position3);
-extern ECS_COMPONENT_DECLARE(Position4);
-extern ECS_COMPONENT_DECLARE(DoublePosition2);
-extern ECS_COMPONENT_DECLARE(DoublePosition3);
-extern ECS_COMPONENT_DECLARE(DoublePosition4);
-extern ECS_COMPONENT_DECLARE(Position);
+extern ECS_COMPONENT_DECLARE(Position2D);
+extern ECS_COMPONENT_DECLARE(Position3D);
+extern ECS_COMPONENT_DECLARE(Position4D);
+extern ECS_COMPONENT_DECLARE(DoublePosition2D);
+extern ECS_COMPONENT_DECLARE(DoublePosition3D);
+extern ECS_COMPONENT_DECLARE(DoublePosition4D);
 extern ECS_COMPONENT_DECLARE(Transform);
-extern ECS_COMPONENT_DECLARE(Velocity2);
-extern ECS_COMPONENT_DECLARE(Velocity3);
-extern ECS_COMPONENT_DECLARE(Velocity4);
-extern ECS_COMPONENT_DECLARE(Velocity);
+extern ECS_COMPONENT_DECLARE(Velocity2D);
+extern ECS_COMPONENT_DECLARE(Velocity3D);
+extern ECS_COMPONENT_DECLARE(Velocity4D);
 extern ECS_COMPONENT_DECLARE(Mass);
 extern ECS_COMPONENT_DECLARE(Damping);
 extern ECS_COMPONENT_DECLARE(GravityScale);
@@ -1790,21 +1881,47 @@ extern ECS_COMPONENT_DECLARE(GravityScale);
 void cvkmImport(ecs_world_t* world);
 
 #ifdef CVKM_FLECS_IMPLEMENTATION
-ECS_COMPONENT_DECLARE(Position2);
-ECS_COMPONENT_DECLARE(Position3);
-ECS_COMPONENT_DECLARE(Position4);
-ECS_COMPONENT_DECLARE(DoublePosition2);
-ECS_COMPONENT_DECLARE(DoublePosition3);
-ECS_COMPONENT_DECLARE(DoublePosition4);
-ECS_COMPONENT_DECLARE(Position);
+ECS_COMPONENT_DECLARE(Position2D);
+ECS_COMPONENT_DECLARE(Position3D);
+ECS_COMPONENT_DECLARE(Position4D);
+ECS_COMPONENT_DECLARE(DoublePosition2D);
+ECS_COMPONENT_DECLARE(DoublePosition3D);
+ECS_COMPONENT_DECLARE(DoublePosition4D);
 ECS_COMPONENT_DECLARE(Transform);
-ECS_COMPONENT_DECLARE(Velocity2);
-ECS_COMPONENT_DECLARE(Velocity3);
-ECS_COMPONENT_DECLARE(Velocity4);
-ECS_COMPONENT_DECLARE(Velocity);
+ECS_COMPONENT_DECLARE(Velocity2D);
+ECS_COMPONENT_DECLARE(Velocity3D);
+ECS_COMPONENT_DECLARE(Velocity4D);
 ECS_COMPONENT_DECLARE(Mass);
 ECS_COMPONENT_DECLARE(Damping);
 ECS_COMPONENT_DECLARE(GravityScale);
+
+#define CVKM_SPAWN_ZERO_CTOR(type) static ECS_CTOR(type, ptr, {\
+  *ptr = (type){ 0 };\
+})
+
+#define CVKM_SPAWN_ONE_CTOR(type) static ECS_CTOR(type, ptr, {\
+  *ptr = (type){ 1 };\
+})
+
+CVKM_SPAWN_ZERO_CTOR(Position2D);
+CVKM_SPAWN_ZERO_CTOR(Position3D);
+CVKM_SPAWN_ZERO_CTOR(Position4D);
+CVKM_SPAWN_ZERO_CTOR(DoublePosition2D);
+CVKM_SPAWN_ZERO_CTOR(DoublePosition3D);
+CVKM_SPAWN_ZERO_CTOR(DoublePosition4D);
+CVKM_SPAWN_ZERO_CTOR(Velocity2D);
+CVKM_SPAWN_ZERO_CTOR(Velocity3D);
+CVKM_SPAWN_ZERO_CTOR(Velocity4D);
+CVKM_SPAWN_ONE_CTOR(Mass);
+CVKM_SPAWN_ONE_CTOR(GravityScale);
+
+ECS_CTOR(Transform, ptr, {
+  *ptr = CVKM_MAT4_IDENTITY;
+})
+
+ECS_CTOR(Damping, ptr, {
+  *ptr = 0.995f;
+})
 
 #define CVKM_MEMBER(member, member_type, struct_type, unit_) {\
   .name = #member,\
@@ -1883,16 +2000,16 @@ void cvkmImport(ecs_world_t* world) {
 
   ECS_IMPORT(world, FlecsUnits);
 
-  CVKM_VEC2_COMPONENT(Position2, ecs_f32_t, EcsMeters);
-  CVKM_VEC3_COMPONENT(Position3, ecs_f32_t, EcsMeters);
-  CVKM_VEC3_COMPONENT(Position4, ecs_f32_t, EcsMeters);
-  CVKM_VEC2_COMPONENT(DoublePosition2, ecs_f64_t, EcsMeters);
-  CVKM_VEC3_COMPONENT(DoublePosition3, ecs_f64_t, EcsMeters);
-  CVKM_VEC3_COMPONENT(DoublePosition4, ecs_f64_t, EcsMeters);
+  CVKM_VEC2_COMPONENT(Position2D, ecs_f32_t, EcsMeters);
+  CVKM_VEC3_COMPONENT(Position3D, ecs_f32_t, EcsMeters);
+  CVKM_VEC3_COMPONENT(Position4D, ecs_f32_t, EcsMeters);
+  CVKM_VEC2_COMPONENT(DoublePosition2D, ecs_f64_t, EcsMeters);
+  CVKM_VEC3_COMPONENT(DoublePosition3D, ecs_f64_t, EcsMeters);
+  CVKM_VEC3_COMPONENT(DoublePosition4D, ecs_f64_t, EcsMeters);
   CVKM_MAT4_COMPONENT(Transform, ecs_f32_t);
-  CVKM_VEC2_COMPONENT(Velocity2, ecs_f32_t, EcsMetersPerSecond);
-  CVKM_VEC2_COMPONENT(Velocity3, ecs_f32_t, EcsMetersPerSecond);
-  CVKM_VEC2_COMPONENT(Velocity4, ecs_f32_t, EcsMetersPerSecond);
+  CVKM_VEC2_COMPONENT(Velocity2D, ecs_f32_t, EcsMetersPerSecond);
+  CVKM_VEC2_COMPONENT(Velocity3D, ecs_f32_t, EcsMetersPerSecond);
+  CVKM_VEC2_COMPONENT(Velocity4D, ecs_f32_t, EcsMetersPerSecond);
   ECS_COMPONENT_DEFINE(world, Mass);
   ecs_add_pair(world, ecs_id(Mass), EcsIsA, EcsKiloGrams);
   ECS_COMPONENT_DEFINE(world, Damping);
@@ -1900,34 +2017,19 @@ void cvkmImport(ecs_world_t* world) {
   ECS_COMPONENT_DEFINE(world, GravityScale);
   ecs_primitive(world, { .entity = ecs_id(GravityScale), .kind = EcsF32 });
 
-#ifdef CVKM_3D
-  CVKM_VEC3_COMPONENT(Velocity, ecs_f32_t, EcsMetersPerSecond);
-
-#ifdef CVKM_DOUBLE_PRECISION
-  CVKM_VEC3_COMPONENT(Position, ecs_f64_t, EcsMeters);
-#else
-  CVKM_VEC3_COMPONENT(Position, ecs_f32_t, EcsMeters);
-#endif
-
-#elif CVKM_4D
-  CVKM_VEC4_COMPONENT(Velocity, ecs_f32_t, EcsMetersPerSecond);
-
-#ifdef CVKM_DOUBLE_PRECISION
-  CVKM_VEC4_COMPONENT(Position, ecs_f64_t, EcsMeters);
-#else
-  CVKM_VEC4_COMPONENT(Position, ecs_f32_t, EcsMeters);
-#endif
-
-#else
-  CVKM_VEC2_COMPONENT(Velocity, ecs_f32_t, EcsMetersPerSecond);
-
-#ifdef CVKM_DOUBLE_PRECISION
-  CVKM_VEC2_COMPONENT(Position, ecs_f64_t, EcsMeters);
-#else
-  CVKM_VEC2_COMPONENT(Position, ecs_f32_t, EcsMeters);
-#endif
-
-#endif
+  ecs_set_hooks(world, Position2D, { .ctor = ecs_ctor(Position2D) });
+  ecs_set_hooks(world, Position3D, { .ctor = ecs_ctor(Position3D) });
+  ecs_set_hooks(world, Position4D, { .ctor = ecs_ctor(Position4D) });
+  ecs_set_hooks(world, DoublePosition2D, { .ctor = ecs_ctor(DoublePosition2D) });
+  ecs_set_hooks(world, DoublePosition3D, { .ctor = ecs_ctor(DoublePosition3D) });
+  ecs_set_hooks(world, DoublePosition4D, { .ctor = ecs_ctor(DoublePosition4D) });
+  ecs_set_hooks(world, Transform, { .ctor = ecs_ctor(Transform) });
+  ecs_set_hooks(world, Velocity2D, { .ctor = ecs_ctor(Velocity2D) });
+  ecs_set_hooks(world, Velocity3D, { .ctor = ecs_ctor(Velocity3D) });
+  ecs_set_hooks(world, Velocity4D, { .ctor = ecs_ctor(Velocity4D) });
+  ecs_set_hooks(world, Mass, { .ctor = ecs_ctor(Mass) });
+  ecs_set_hooks(world, Damping, { .ctor = ecs_ctor(Damping) });
+  ecs_set_hooks(world, GravityScale, { .ctor = ecs_ctor(GravityScale) });
 }
 
 #undef CVKM_FLECS_IMPLEMENTATION
