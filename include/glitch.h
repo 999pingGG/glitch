@@ -4,6 +4,14 @@
 #define CVKM_NO
 #include <cvkm.h>
 
+#ifdef _WIN32
+#define GLI_WINDOWS
+#endif
+
+#ifdef __linux__
+#define GLI_LINUX
+#endif
+
 #ifdef GLI_WINDOWS
 // Window's OpenGL header is ancient (version 1.1).
 // So we need to provide some stuff here by ourselves.

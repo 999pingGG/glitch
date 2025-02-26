@@ -1,5 +1,5 @@
 // Before anything happens at all, the Windows API needs a crash course in staying out of the way...
-#ifdef GLI_WINDOWS
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
 #define _CRT_NONSTDC_NO_WARNINGS

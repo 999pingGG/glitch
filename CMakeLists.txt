@@ -35,10 +35,8 @@ else()
 endif()
 
 if(UNIX AND NOT ANDROID)
-  target_compile_definitions(tests PRIVATE GLI_LINUX)
   target_link_libraries(tests PRIVATE X11 GL)
 elseif(WIN32)
-  target_compile_definitions(tests PRIVATE GLI_WINDOWS)
   target_link_libraries(tests PRIVATE Opengl32)
 endif()
 
