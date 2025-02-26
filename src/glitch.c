@@ -35,6 +35,7 @@ typedef GLXContext (*glXCreateContextAttribsARBProc)(
 static GLXContext context;
 static Display* display;
 static Window window;
+static Atom wm_delete;
 #elif defined(GLI_WINDOWS)
 typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC)(
   HDC device_context_handle,
@@ -334,7 +335,19 @@ static GLint get_uniform_location(const ShaderProgram* program, const char* unif
 static void PreRenderFrame(ecs_iter_t* it) {
   (void)it;
 #ifdef GLI_LINUX
-  // TODO: Call ecs_quit on window close.
+  while (XPending(display)) {
+    XEvent event;
+    XNextEvent(display, &event);
+    switch (event.type) {
+      case ClientMessage:
+        if ((Atom)event.xclient.data.l[0] == wm_delete) {
+          ecs_quit(it->world);
+        }
+        break;
+      default:
+        break;
+    }
+  }
 #else
   MSG message;
   while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
@@ -511,7 +524,7 @@ void glitchImport(ecs_world_t* world) {
   }
 
   // Create a colormap and set window attributes.
-  XSetWindowAttributes swa = {
+  XSetWindowAttributes set_window_attributes = {
     .background_pixmap = None,
     .event_mask = StructureNotifyMask | ExposureMask | KeyPressMask,
     .colormap = XCreateColormap(display, RootWindow(display, visual_info->screen), visual_info->visual, AllocNone),
@@ -520,12 +533,16 @@ void glitchImport(ecs_world_t* world) {
   window = XCreateWindow(
     display,
     RootWindow(display, visual_info->screen),
-    0, 0, GLI_WIDTH, GLI_HEIGHT, 0,
+    0,
+    0,
+    GLI_WIDTH,
+    GLI_HEIGHT,
+    0,
     visual_info->depth,
     InputOutput,
     visual_info->visual,
     CWBorderPixel | CWColormap | CWEventMask,
-    &swa
+    &set_window_attributes
   );
   XFree(visual_info);
 
@@ -533,6 +550,9 @@ void glitchImport(ecs_world_t* world) {
     fprintf(stderr, "Failed to create window.\n");
     return;
   }
+
+  wm_delete = XInternAtom(display, "WM_DELETE_WINDOW", False);
+  XSetWMProtocols(display, window, &wm_delete, 1);
 
   XStoreName(display, window, window_name);
   XMapWindow(display, window);
