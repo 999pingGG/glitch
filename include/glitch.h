@@ -77,12 +77,17 @@ typedef struct Camera3D {
   float field_of_view, near_plane, far_plane;
 } Camera3D;
 
+typedef vkm_vec4 Color;
+typedef Color ClearColor;
+
 extern ECS_COMPONENT_DECLARE(MeshData);
 extern ECS_COMPONENT_DECLARE(Mesh);
 extern ECS_COMPONENT_DECLARE(ShaderProgramSource);
 extern ECS_COMPONENT_DECLARE(ShaderProgram);
 extern ECS_COMPONENT_DECLARE(Camera2D);
 extern ECS_COMPONENT_DECLARE(Camera3D);
+extern ECS_COMPONENT_DECLARE(Color);
+extern ECS_COMPONENT_DECLARE(ClearColor);
 
 extern ECS_TAG_DECLARE(Uses);
 

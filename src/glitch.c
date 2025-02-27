@@ -136,6 +136,8 @@ ECS_COMPONENT_DECLARE(ShaderProgramSource);
 ECS_COMPONENT_DECLARE(ShaderProgram);
 ECS_COMPONENT_DECLARE(Camera2D);
 ECS_COMPONENT_DECLARE(Camera3D);
+ECS_COMPONENT_DECLARE(Color);
+ECS_COMPONENT_DECLARE(ClearColor);
 
 ECS_TAG_DECLARE(Uses);
 
@@ -220,6 +222,14 @@ ECS_CTOR(Camera3D, ptr, {
     .position = CVKM_VEC3_ZERO,
     .field_of_view = 80.0f,
   };
+})
+
+ECS_CTOR(Color, ptr, {
+  *ptr = (Color){ { 0.0f, 0.0f, 0.0f, 1.0f } };
+})
+
+ECS_CTOR(ClearColor, ptr, {
+  *ptr = (ClearColor){ { 0.0f, 0.0f, 0.0f, 1.0f } };
 })
 
 static GLuint compile_shader(const GLenum type, const char* source) {
@@ -340,7 +350,8 @@ static GLint get_uniform_location(const ShaderProgram* program, const char* unif
 }
 
 static void PreRenderFrame(ecs_iter_t* it) {
-  (void)it;
+  const ClearColor* clear_color = ecs_field(it, ClearColor, 0);
+
 #ifdef GLI_LINUX
   while (XPending(display)) {
     XEvent event;
@@ -367,7 +378,10 @@ static void PreRenderFrame(ecs_iter_t* it) {
   }
 #endif
 
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  if (clear_color) {
+    glClearColor(clear_color->r, clear_color->g, clear_color->b, clear_color->a);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  }
 }
 
 static void render(ecs_iter_t* it, const bool is_2d) {
@@ -490,6 +504,11 @@ static void fini(ecs_world_t* world, void* unused) {
 #endif
 }
 
+#pragma GCC diagnostic push
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdollar-in-identifier-extension"
+#endif
+
 void glitchImport(ecs_world_t* world) {
   ECS_MODULE(world, glitch);
 
@@ -503,6 +522,10 @@ void glitchImport(ecs_world_t* world) {
   ECS_COMPONENT_DEFINE(world, ShaderProgram);
   ECS_COMPONENT_DEFINE(world, Camera2D);
   ECS_COMPONENT_DEFINE(world, Camera3D);
+  ECS_COMPONENT_DEFINE(world, Color);
+  ecs_add_pair(world, ecs_id(Color), EcsIsA, ecs_id(vkm_vec4));
+  ECS_COMPONENT_DEFINE(world, ClearColor);
+  ecs_add_pair(world, ecs_id(ClearColor), EcsIsA, ecs_id(Color));
 
   ECS_TAG_DEFINE(world, Uses);
 
@@ -522,6 +545,8 @@ void glitchImport(ecs_world_t* world) {
   GLI_SET_HOOKS(ShaderProgram);
   ecs_set_hooks(world, Camera2D, { .ctor = ecs_ctor(Camera2D) });
   ecs_set_hooks(world, Camera3D, { .ctor = ecs_ctor(Camera3D) });
+  ecs_set_hooks(world, Color, { .ctor = ecs_ctor(Color) });
+  ecs_set_hooks(world, ClearColor, { .ctor = ecs_ctor(ClearColor) });
 
   static const char* window_name = "GLitch";
 
@@ -762,7 +787,7 @@ void glitchImport(ecs_world_t* world) {
 
   ECS_SYSTEM(world, MakeMeshes, EcsOnLoad, [in] MeshData, [out] !Mesh);
   ECS_SYSTEM(world, CompileShaders, EcsOnLoad, [in] ShaderProgramSource, [out] !ShaderProgram);
-  ECS_SYSTEM(world, PreRenderFrame, EcsPreStore, 0);
+  ECS_SYSTEM(world, PreRenderFrame, EcsPreStore, [in] ?ClearColor(ClearColor));
   ECS_SYSTEM(world, Render2D, EcsOnStore,
     [in] cvkm.Position2D,
     [none] (Uses, $mesh),
@@ -781,5 +806,7 @@ void glitchImport(ecs_world_t* world) {
   );
   ECS_SYSTEM(world, PostRenderFrame, EcsPostFrame, 0);
 
-  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  ecs_singleton_add(world, ClearColor);
 }
+
+#pragma GCC diagnostic pop

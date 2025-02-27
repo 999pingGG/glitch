@@ -125,7 +125,7 @@ int main(const int argc, char** argv) {
     },
     .set = (ecs_value_t[]) {
       { .type = ecs_id(TimeScale), .ptr = &(float){ 2.0f } },
-      0,
+      { 0 },
     },
   });
 

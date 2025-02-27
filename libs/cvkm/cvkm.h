@@ -59,18 +59,17 @@
 #define CVKM_SQRT2_F ((float)CVKM_SQRT2)
 #define CVKM_SQRT1_2_F ((float)CVKM_SQRT1_2)
 
-#if defined(__GNUC__) || defined(__clang__)
-#define IGNORE_WARNINGS_BEGIN\
-  _Pragma("GCC diagnostic push")\
-  _Pragma("GCC diagnostic ignored \"-Wunused-function\"")
-#define IGNORE_WARNINGS_END\
-  _Pragma("GCC diagnostic pop")
-#else
-#define IGNORE_WARNINGS_BEGIN
-#define IGNORE_WARNINGS_END
+#ifdef __clang__
+// Push twice and pop once at the end of the file. This restores the unused function warning but leaves the rest
+// suppressed, in order to avoid having user code throw the warning.
+#pragma GCC diagnostic push
+// This is ignored because in some macros using _Generic we list both const and non-const types. Some compilers (clang
+// and possibly others...?) throw a warning complaining about unreachable cases because qualifiers (const and others)
+// are discarded, so we just tell them to shut up, we use the same function in both variants anyway.
+#pragma GCC diagnostic ignored "-Wunreachable-code-generic-assoc"
 #endif
-
-IGNORE_WARNINGS_BEGIN
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
 
 #define CVKM_DEFINE_VEC2(prefix, type) typedef union vkm_##prefix##vec2 {\
   struct {\
@@ -1864,6 +1863,38 @@ typedef float Damping;
 typedef float GravityScale;
 
 #ifdef CVKM_ENABLE_FLECS
+extern ECS_COMPONENT_DECLARE(vkm_bvec2);
+extern ECS_COMPONENT_DECLARE(vkm_ubvec2);
+extern ECS_COMPONENT_DECLARE(vkm_svec2);
+extern ECS_COMPONENT_DECLARE(vkm_usvec2);
+extern ECS_COMPONENT_DECLARE(vkm_ivec2);
+extern ECS_COMPONENT_DECLARE(vkm_uvec2);
+extern ECS_COMPONENT_DECLARE(vkm_lvec2);
+extern ECS_COMPONENT_DECLARE(vkm_ulvec2);
+extern ECS_COMPONENT_DECLARE(vkm_vec2);
+extern ECS_COMPONENT_DECLARE(vkm_dvec2);
+extern ECS_COMPONENT_DECLARE(vkm_bvec3);
+extern ECS_COMPONENT_DECLARE(vkm_ubvec3);
+extern ECS_COMPONENT_DECLARE(vkm_svec3);
+extern ECS_COMPONENT_DECLARE(vkm_usvec3);
+extern ECS_COMPONENT_DECLARE(vkm_ivec3);
+extern ECS_COMPONENT_DECLARE(vkm_uvec3);
+extern ECS_COMPONENT_DECLARE(vkm_lvec3);
+extern ECS_COMPONENT_DECLARE(vkm_ulvec3);
+extern ECS_COMPONENT_DECLARE(vkm_vec3);
+extern ECS_COMPONENT_DECLARE(vkm_dvec3);
+extern ECS_COMPONENT_DECLARE(vkm_bvec4);
+extern ECS_COMPONENT_DECLARE(vkm_ubvec4);
+extern ECS_COMPONENT_DECLARE(vkm_svec4);
+extern ECS_COMPONENT_DECLARE(vkm_usvec4);
+extern ECS_COMPONENT_DECLARE(vkm_ivec4);
+extern ECS_COMPONENT_DECLARE(vkm_uvec4);
+extern ECS_COMPONENT_DECLARE(vkm_lvec4);
+extern ECS_COMPONENT_DECLARE(vkm_ulvec4);
+extern ECS_COMPONENT_DECLARE(vkm_vec4);
+extern ECS_COMPONENT_DECLARE(vkm_dvec4);
+extern ECS_COMPONENT_DECLARE(vkm_mat4);
+extern ECS_COMPONENT_DECLARE(vkm_quat);
 extern ECS_COMPONENT_DECLARE(Position2D);
 extern ECS_COMPONENT_DECLARE(Position3D);
 extern ECS_COMPONENT_DECLARE(Position4D);
@@ -1881,6 +1912,38 @@ extern ECS_COMPONENT_DECLARE(GravityScale);
 void cvkmImport(ecs_world_t* world);
 
 #ifdef CVKM_FLECS_IMPLEMENTATION
+ECS_COMPONENT_DECLARE(vkm_bvec2);
+ECS_COMPONENT_DECLARE(vkm_ubvec2);
+ECS_COMPONENT_DECLARE(vkm_svec2);
+ECS_COMPONENT_DECLARE(vkm_usvec2);
+ECS_COMPONENT_DECLARE(vkm_ivec2);
+ECS_COMPONENT_DECLARE(vkm_uvec2);
+ECS_COMPONENT_DECLARE(vkm_lvec2);
+ECS_COMPONENT_DECLARE(vkm_ulvec2);
+ECS_COMPONENT_DECLARE(vkm_vec2);
+ECS_COMPONENT_DECLARE(vkm_dvec2);
+ECS_COMPONENT_DECLARE(vkm_bvec3);
+ECS_COMPONENT_DECLARE(vkm_ubvec3);
+ECS_COMPONENT_DECLARE(vkm_svec3);
+ECS_COMPONENT_DECLARE(vkm_usvec3);
+ECS_COMPONENT_DECLARE(vkm_ivec3);
+ECS_COMPONENT_DECLARE(vkm_uvec3);
+ECS_COMPONENT_DECLARE(vkm_lvec3);
+ECS_COMPONENT_DECLARE(vkm_ulvec3);
+ECS_COMPONENT_DECLARE(vkm_vec3);
+ECS_COMPONENT_DECLARE(vkm_dvec3);
+ECS_COMPONENT_DECLARE(vkm_bvec4);
+ECS_COMPONENT_DECLARE(vkm_ubvec4);
+ECS_COMPONENT_DECLARE(vkm_svec4);
+ECS_COMPONENT_DECLARE(vkm_usvec4);
+ECS_COMPONENT_DECLARE(vkm_ivec4);
+ECS_COMPONENT_DECLARE(vkm_uvec4);
+ECS_COMPONENT_DECLARE(vkm_lvec4);
+ECS_COMPONENT_DECLARE(vkm_ulvec4);
+ECS_COMPONENT_DECLARE(vkm_vec4);
+ECS_COMPONENT_DECLARE(vkm_dvec4);
+ECS_COMPONENT_DECLARE(vkm_mat4);
+ECS_COMPONENT_DECLARE(vkm_quat);
 ECS_COMPONENT_DECLARE(Position2D);
 ECS_COMPONENT_DECLARE(Position3D);
 ECS_COMPONENT_DECLARE(Position4D);
@@ -1903,17 +1966,49 @@ ECS_COMPONENT_DECLARE(GravityScale);
   *ptr = (type){ 1 };\
 })
 
-CVKM_SPAWN_ZERO_CTOR(Position2D);
-CVKM_SPAWN_ZERO_CTOR(Position3D);
-CVKM_SPAWN_ZERO_CTOR(Position4D);
-CVKM_SPAWN_ZERO_CTOR(DoublePosition2D);
-CVKM_SPAWN_ZERO_CTOR(DoublePosition3D);
-CVKM_SPAWN_ZERO_CTOR(DoublePosition4D);
-CVKM_SPAWN_ZERO_CTOR(Velocity2D);
-CVKM_SPAWN_ZERO_CTOR(Velocity3D);
-CVKM_SPAWN_ZERO_CTOR(Velocity4D);
-CVKM_SPAWN_ONE_CTOR(Mass);
-CVKM_SPAWN_ONE_CTOR(GravityScale);
+CVKM_SPAWN_ZERO_CTOR(vkm_bvec2)
+CVKM_SPAWN_ZERO_CTOR(vkm_ubvec2)
+CVKM_SPAWN_ZERO_CTOR(vkm_svec2)
+CVKM_SPAWN_ZERO_CTOR(vkm_usvec2)
+CVKM_SPAWN_ZERO_CTOR(vkm_ivec2)
+CVKM_SPAWN_ZERO_CTOR(vkm_uvec2)
+CVKM_SPAWN_ZERO_CTOR(vkm_lvec2)
+CVKM_SPAWN_ZERO_CTOR(vkm_ulvec2)
+CVKM_SPAWN_ZERO_CTOR(vkm_vec2)
+CVKM_SPAWN_ZERO_CTOR(vkm_dvec2)
+CVKM_SPAWN_ZERO_CTOR(vkm_bvec3)
+CVKM_SPAWN_ZERO_CTOR(vkm_ubvec3)
+CVKM_SPAWN_ZERO_CTOR(vkm_svec3)
+CVKM_SPAWN_ZERO_CTOR(vkm_usvec3)
+CVKM_SPAWN_ZERO_CTOR(vkm_ivec3)
+CVKM_SPAWN_ZERO_CTOR(vkm_uvec3)
+CVKM_SPAWN_ZERO_CTOR(vkm_lvec3)
+CVKM_SPAWN_ZERO_CTOR(vkm_ulvec3)
+CVKM_SPAWN_ZERO_CTOR(vkm_vec3)
+CVKM_SPAWN_ZERO_CTOR(vkm_dvec3)
+CVKM_SPAWN_ZERO_CTOR(vkm_bvec4)
+CVKM_SPAWN_ZERO_CTOR(vkm_ubvec4)
+CVKM_SPAWN_ZERO_CTOR(vkm_svec4)
+CVKM_SPAWN_ZERO_CTOR(vkm_usvec4)
+CVKM_SPAWN_ZERO_CTOR(vkm_ivec4)
+CVKM_SPAWN_ZERO_CTOR(vkm_uvec4)
+CVKM_SPAWN_ZERO_CTOR(vkm_lvec4)
+CVKM_SPAWN_ZERO_CTOR(vkm_ulvec4)
+CVKM_SPAWN_ZERO_CTOR(vkm_vec4)
+CVKM_SPAWN_ZERO_CTOR(vkm_dvec4)
+CVKM_SPAWN_ZERO_CTOR(vkm_mat4)
+CVKM_SPAWN_ZERO_CTOR(vkm_quat)
+CVKM_SPAWN_ZERO_CTOR(Position2D)
+CVKM_SPAWN_ZERO_CTOR(Position3D)
+CVKM_SPAWN_ZERO_CTOR(Position4D)
+CVKM_SPAWN_ZERO_CTOR(DoublePosition2D)
+CVKM_SPAWN_ZERO_CTOR(DoublePosition3D)
+CVKM_SPAWN_ZERO_CTOR(DoublePosition4D)
+CVKM_SPAWN_ZERO_CTOR(Velocity2D)
+CVKM_SPAWN_ZERO_CTOR(Velocity3D)
+CVKM_SPAWN_ZERO_CTOR(Velocity4D)
+CVKM_SPAWN_ONE_CTOR(Mass)
+CVKM_SPAWN_ONE_CTOR(GravityScale)
 
 ECS_CTOR(Transform, ptr, {
   *ptr = CVKM_MAT4_IDENTITY;
@@ -1930,7 +2025,7 @@ ECS_CTOR(Damping, ptr, {
   .unit = unit_,\
 }
 
-#define CVKM_VEC2_COMPONENT(struct_type, member_type, unit_) ECS_COMPONENT_DEFINE(world, struct_type);\
+#define CVKM_VEC2_COMPONENT(name, struct_type, member_type, unit_) ECS_COMPONENT_DEFINE(world, struct_type);\
   ecs_struct(\
     world,\
     {\
@@ -1940,9 +2035,11 @@ ECS_CTOR(Damping, ptr, {
         CVKM_MEMBER(y, member_type, struct_type, unit_),\
       },\
     }\
-  )
+  );\
+  ecs_set_name(world, ecs_id(struct_type), #name);\
+  ecs_set_symbol(world, ecs_id(struct_type), #name)
 
-#define CVKM_VEC3_COMPONENT(struct_type, member_type, unit_) ECS_COMPONENT_DEFINE(world, struct_type);\
+#define CVKM_VEC3_COMPONENT(name, struct_type, member_type, unit_) ECS_COMPONENT_DEFINE(world, struct_type);\
   ecs_struct(\
     world,\
     {\
@@ -1953,9 +2050,11 @@ ECS_CTOR(Damping, ptr, {
         CVKM_MEMBER(z, member_type, struct_type, unit_),\
       },\
     }\
-  )
+  );\
+  ecs_set_name(world, ecs_id(struct_type), #name);\
+  ecs_set_symbol(world, ecs_id(struct_type), #name)
 
-#define CVKM_VEC4_COMPONENT(struct_type, member_type, unit_) ECS_COMPONENT_DEFINE(world, struct_type);\
+#define CVKM_VEC4_COMPONENT(name, struct_type, member_type, unit_) ECS_COMPONENT_DEFINE(world, struct_type);\
   ecs_struct(\
     world,\
     {\
@@ -1967,9 +2066,11 @@ ECS_CTOR(Damping, ptr, {
         CVKM_MEMBER(w, member_type, struct_type, unit_),\
       },\
     }\
-  )
+  );\
+  ecs_set_name(world, ecs_id(struct_type), #name);\
+  ecs_set_symbol(world, ecs_id(struct_type), #name)
 
-#define CVKM_MAT4_COMPONENT(struct_type, member_type) ECS_COMPONENT_DEFINE(world, struct_type);\
+#define CVKM_MAT4_COMPONENT(name, struct_type, member_type) ECS_COMPONENT_DEFINE(world, struct_type);\
   ecs_struct(\
     world,\
     {\
@@ -1993,23 +2094,57 @@ ECS_CTOR(Damping, ptr, {
         CVKM_MEMBER(m33, member_type, struct_type, 0),\
       },\
     }\
-  )
+  );\
+  ecs_set_name(world, ecs_id(struct_type), #name);\
+  ecs_set_symbol(world, ecs_id(struct_type), #name)
 
 void cvkmImport(ecs_world_t* world) {
   ECS_MODULE(world, cvkm);
 
   ECS_IMPORT(world, FlecsUnits);
 
-  CVKM_VEC2_COMPONENT(Position2D, ecs_f32_t, EcsMeters);
-  CVKM_VEC3_COMPONENT(Position3D, ecs_f32_t, EcsMeters);
-  CVKM_VEC3_COMPONENT(Position4D, ecs_f32_t, EcsMeters);
-  CVKM_VEC2_COMPONENT(DoublePosition2D, ecs_f64_t, EcsMeters);
-  CVKM_VEC3_COMPONENT(DoublePosition3D, ecs_f64_t, EcsMeters);
-  CVKM_VEC3_COMPONENT(DoublePosition4D, ecs_f64_t, EcsMeters);
-  CVKM_MAT4_COMPONENT(Transform, ecs_f32_t);
-  CVKM_VEC2_COMPONENT(Velocity2D, ecs_f32_t, EcsMetersPerSecond);
-  CVKM_VEC2_COMPONENT(Velocity3D, ecs_f32_t, EcsMetersPerSecond);
-  CVKM_VEC2_COMPONENT(Velocity4D, ecs_f32_t, EcsMetersPerSecond);
+  CVKM_VEC2_COMPONENT(bvec2, vkm_bvec2, ecs_i8_t, 0);
+  CVKM_VEC2_COMPONENT(ubvec2, vkm_ubvec2, ecs_u8_t, 0);
+  CVKM_VEC2_COMPONENT(svec2, vkm_svec2, ecs_i16_t, 0);
+  CVKM_VEC2_COMPONENT(usvec2, vkm_usvec2, ecs_u16_t, 0);
+  CVKM_VEC2_COMPONENT(ivec2, vkm_ivec2, ecs_i32_t, 0);
+  CVKM_VEC2_COMPONENT(uvec2, vkm_uvec2, ecs_u32_t, 0);
+  CVKM_VEC2_COMPONENT(lvec2, vkm_lvec2, ecs_i64_t, 0);
+  CVKM_VEC2_COMPONENT(ulvec2, vkm_ulvec2, ecs_u64_t, 0);
+  CVKM_VEC2_COMPONENT(vec2, vkm_vec2, ecs_f32_t, 0);
+  CVKM_VEC2_COMPONENT(dvec2, vkm_dvec2, ecs_f64_t, 0);
+  CVKM_VEC3_COMPONENT(bvec3, vkm_bvec3, ecs_i8_t, 0);
+  CVKM_VEC3_COMPONENT(ubvec3, vkm_ubvec3, ecs_u8_t, 0);
+  CVKM_VEC3_COMPONENT(svec3, vkm_svec3, ecs_i16_t, 0);
+  CVKM_VEC3_COMPONENT(usvec3, vkm_usvec3, ecs_u16_t, 0);
+  CVKM_VEC3_COMPONENT(ivec3, vkm_ivec3, ecs_i32_t, 0);
+  CVKM_VEC3_COMPONENT(uvec3, vkm_uvec3, ecs_u32_t, 0);
+  CVKM_VEC3_COMPONENT(lvec3, vkm_lvec3, ecs_i64_t, 0);
+  CVKM_VEC3_COMPONENT(ulvec3, vkm_ulvec3, ecs_u64_t, 0);
+  CVKM_VEC3_COMPONENT(vec3, vkm_vec3, ecs_f32_t, 0);
+  CVKM_VEC3_COMPONENT(dvec3, vkm_dvec3, ecs_f64_t, 0);
+  CVKM_VEC4_COMPONENT(bvec4, vkm_bvec4, ecs_i8_t, 0);
+  CVKM_VEC4_COMPONENT(ubvec4, vkm_ubvec4, ecs_u8_t, 0);
+  CVKM_VEC4_COMPONENT(svec4, vkm_svec4, ecs_i16_t, 0);
+  CVKM_VEC4_COMPONENT(usvec4, vkm_usvec4, ecs_u16_t, 0);
+  CVKM_VEC4_COMPONENT(ivec4, vkm_ivec4, ecs_i32_t, 0);
+  CVKM_VEC4_COMPONENT(uvec4, vkm_uvec4, ecs_u32_t, 0);
+  CVKM_VEC4_COMPONENT(lvec4, vkm_lvec4, ecs_i64_t, 0);
+  CVKM_VEC4_COMPONENT(ulvec4, vkm_ulvec4, ecs_u64_t, 0);
+  CVKM_VEC4_COMPONENT(vec4, vkm_vec4, ecs_f32_t, 0);
+  CVKM_VEC4_COMPONENT(dvec4, vkm_dvec4, ecs_f64_t, 0);
+  CVKM_MAT4_COMPONENT(mat4, vkm_mat4, ecs_f32_t);
+  CVKM_VEC4_COMPONENT(quat, vkm_quat, ecs_f32_t, 0);
+  CVKM_VEC2_COMPONENT(Position2D, Position2D, ecs_f32_t, EcsMeters);
+  CVKM_VEC3_COMPONENT(Position3D, Position3D, ecs_f32_t, EcsMeters);
+  CVKM_VEC3_COMPONENT(Position4D, Position4D, ecs_f32_t, EcsMeters);
+  CVKM_VEC2_COMPONENT(DoublePosition2D, DoublePosition2D, ecs_f64_t, EcsMeters);
+  CVKM_VEC3_COMPONENT(DoublePosition3D, DoublePosition3D, ecs_f64_t, EcsMeters);
+  CVKM_VEC3_COMPONENT(DoublePosition4D, DoublePosition4D, ecs_f64_t, EcsMeters);
+  CVKM_MAT4_COMPONENT(Transform, Transform, ecs_f32_t);
+  CVKM_VEC2_COMPONENT(Velocity2D, Velocity2D, ecs_f32_t, EcsMetersPerSecond);
+  CVKM_VEC2_COMPONENT(Velocity3D, Velocity3D, ecs_f32_t, EcsMetersPerSecond);
+  CVKM_VEC2_COMPONENT(Velocity4D, Velocity4D, ecs_f32_t, EcsMetersPerSecond);
   ECS_COMPONENT_DEFINE(world, Mass);
   ecs_add_pair(world, ecs_id(Mass), EcsIsA, EcsKiloGrams);
   ECS_COMPONENT_DEFINE(world, Damping);
@@ -2017,6 +2152,38 @@ void cvkmImport(ecs_world_t* world) {
   ECS_COMPONENT_DEFINE(world, GravityScale);
   ecs_primitive(world, { .entity = ecs_id(GravityScale), .kind = EcsF32 });
 
+  ecs_set_hooks(world, vkm_bvec2, { .ctor = ecs_ctor(vkm_bvec2) });
+  ecs_set_hooks(world, vkm_ubvec2, { .ctor = ecs_ctor(vkm_ubvec2) });
+  ecs_set_hooks(world, vkm_svec2, { .ctor = ecs_ctor(vkm_svec2) });
+  ecs_set_hooks(world, vkm_usvec2, { .ctor = ecs_ctor(vkm_usvec2) });
+  ecs_set_hooks(world, vkm_ivec2, { .ctor = ecs_ctor(vkm_ivec2) });
+  ecs_set_hooks(world, vkm_uvec2, { .ctor = ecs_ctor(vkm_uvec2) });
+  ecs_set_hooks(world, vkm_lvec2, { .ctor = ecs_ctor(vkm_lvec2) });
+  ecs_set_hooks(world, vkm_ulvec2, { .ctor = ecs_ctor(vkm_ulvec2) });
+  ecs_set_hooks(world, vkm_vec2, { .ctor = ecs_ctor(vkm_vec2) });
+  ecs_set_hooks(world, vkm_dvec2, { .ctor = ecs_ctor(vkm_dvec2) });
+  ecs_set_hooks(world, vkm_bvec3, { .ctor = ecs_ctor(vkm_bvec3) });
+  ecs_set_hooks(world, vkm_ubvec3, { .ctor = ecs_ctor(vkm_ubvec3) });
+  ecs_set_hooks(world, vkm_svec3, { .ctor = ecs_ctor(vkm_svec3) });
+  ecs_set_hooks(world, vkm_usvec3, { .ctor = ecs_ctor(vkm_usvec3) });
+  ecs_set_hooks(world, vkm_ivec3, { .ctor = ecs_ctor(vkm_ivec3) });
+  ecs_set_hooks(world, vkm_uvec3, { .ctor = ecs_ctor(vkm_uvec3) });
+  ecs_set_hooks(world, vkm_lvec3, { .ctor = ecs_ctor(vkm_lvec3) });
+  ecs_set_hooks(world, vkm_ulvec3, { .ctor = ecs_ctor(vkm_ulvec3) });
+  ecs_set_hooks(world, vkm_vec3, { .ctor = ecs_ctor(vkm_vec3) });
+  ecs_set_hooks(world, vkm_dvec3, { .ctor = ecs_ctor(vkm_dvec3) });
+  ecs_set_hooks(world, vkm_bvec4, { .ctor = ecs_ctor(vkm_bvec4) });
+  ecs_set_hooks(world, vkm_ubvec4, { .ctor = ecs_ctor(vkm_ubvec4) });
+  ecs_set_hooks(world, vkm_svec4, { .ctor = ecs_ctor(vkm_svec4) });
+  ecs_set_hooks(world, vkm_usvec4, { .ctor = ecs_ctor(vkm_usvec4) });
+  ecs_set_hooks(world, vkm_ivec4, { .ctor = ecs_ctor(vkm_ivec4) });
+  ecs_set_hooks(world, vkm_uvec4, { .ctor = ecs_ctor(vkm_uvec4) });
+  ecs_set_hooks(world, vkm_lvec4, { .ctor = ecs_ctor(vkm_lvec4) });
+  ecs_set_hooks(world, vkm_ulvec4, { .ctor = ecs_ctor(vkm_ulvec4) });
+  ecs_set_hooks(world, vkm_vec4, { .ctor = ecs_ctor(vkm_vec4) });
+  ecs_set_hooks(world, vkm_dvec4, { .ctor = ecs_ctor(vkm_dvec4) });
+  ecs_set_hooks(world, vkm_mat4, { .ctor = ecs_ctor(vkm_mat4) });
+  ecs_set_hooks(world, vkm_quat, { .ctor = ecs_ctor(vkm_quat) });
   ecs_set_hooks(world, Position2D, { .ctor = ecs_ctor(Position2D) });
   ecs_set_hooks(world, Position3D, { .ctor = ecs_ctor(Position3D) });
   ecs_set_hooks(world, Position4D, { .ctor = ecs_ctor(Position4D) });
@@ -2036,5 +2203,5 @@ void cvkmImport(ecs_world_t* world) {
 #endif
 #endif
 
-IGNORE_WARNINGS_END
+#pragma GCC diagnostic pop
 #endif
