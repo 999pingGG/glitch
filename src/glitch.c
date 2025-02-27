@@ -504,9 +504,11 @@ static void fini(ecs_world_t* world, void* unused) {
 #endif
 }
 
+#ifndef _MSC_VER
 #pragma GCC diagnostic push
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wdollar-in-identifier-extension"
+#endif
 #endif
 
 void glitchImport(ecs_world_t* world) {
@@ -809,4 +811,6 @@ void glitchImport(ecs_world_t* world) {
   ecs_singleton_add(world, ClearColor);
 }
 
+#ifndef _MSC_VER
 #pragma GCC diagnostic pop
+#endif

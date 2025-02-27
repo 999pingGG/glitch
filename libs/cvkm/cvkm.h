@@ -59,6 +59,7 @@
 #define CVKM_SQRT2_F ((float)CVKM_SQRT2)
 #define CVKM_SQRT1_2_F ((float)CVKM_SQRT1_2)
 
+#ifndef _MSC_VER
 #ifdef __clang__
 // Push twice and pop once at the end of the file. This restores the unused function warning but leaves the rest
 // suppressed, in order to avoid having user code throw the warning.
@@ -70,6 +71,7 @@
 #endif
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
+#endif
 
 #define CVKM_DEFINE_VEC2(prefix, type) typedef union vkm_##prefix##vec2 {\
   struct {\
@@ -2203,5 +2205,7 @@ void cvkmImport(ecs_world_t* world) {
 #endif
 #endif
 
+#ifndef _MSC_VER
 #pragma GCC diagnostic pop
+#endif
 #endif
