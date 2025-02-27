@@ -88,6 +88,16 @@ typedef void (*glGetProgramivProc)(GLuint program, GLenum pname, GLint* params);
 static glGetProgramivProc glGetProgramiv;
 typedef void (*glGetProgramInfoLogProc)(GLuint program, GLsizei bufSize, GLsizei* length, GLchar* infoLog);
 static glGetProgramInfoLogProc glGetProgramInfoLog;
+typedef void (*glGetActiveAttribProc)(
+  GLuint program,
+  GLuint index,
+  GLsizei bufSize,
+  GLsizei* length,
+  GLint* size,
+  GLenum* type,
+  GLchar* name
+);
+static glGetActiveAttribProc glGetActiveAttrib;
 typedef void (*glGetActiveUniformProc)(
   GLuint program,
   GLuint index,
@@ -98,6 +108,8 @@ typedef void (*glGetActiveUniformProc)(
   GLchar* name
 );
 static glGetActiveUniformProc glGetActiveUniform;
+typedef GLint (*glGetAttribLocationProc)(GLuint program, const GLchar* name);
+static glGetAttribLocationProc glGetAttribLocation;
 typedef GLint (*glGetUniformLocationProc)(GLuint program, const GLchar* name);
 static glGetUniformLocationProc glGetUniformLocation;
 typedef void (*glGenVertexArraysProc)(GLsizei n, GLuint* arrays);
@@ -206,6 +218,10 @@ ECS_DTOR(ShaderProgram, ptr, {
     free(ptr->uniforms[j].name);
   }
   free(ptr->uniforms);
+  for (int j = 0; j < ptr->attributes_count; j++) {
+    free(ptr->attributes[j].name);
+  }
+  free(ptr->attributes);
   glDeleteProgram(ptr->program);
   *ptr = (ShaderProgram){ 0 };
 })
@@ -294,6 +310,7 @@ static void CompileShaders(ecs_iter_t* it) {
     fragment_shader = compile_shader(GL_FRAGMENT_SHADER, source->fragment_shader);
 
     if (!vertex_shader || !fragment_shader) {
+      ecs_delete(it->world, it->entities[i]);
       goto cleanup;
     }
 
@@ -309,6 +326,7 @@ static void CompileShaders(ecs_iter_t* it) {
       glGetProgramInfoLog(shader_program.program, sizeof(info_log), NULL, info_log);
       fprintf(stderr, "Program linking failed: %s\n", info_log);
       glDeleteProgram(shader_program.program);
+      ecs_delete(it->world, it->entities[i]);
       goto cleanup;
     }
 
@@ -317,16 +335,40 @@ static void CompileShaders(ecs_iter_t* it) {
     char* name_buffer = malloc(max_length);
 
     glGetProgramiv(shader_program.program, GL_ACTIVE_UNIFORMS, &shader_program.uniforms_count);
-    shader_program.uniforms = malloc(shader_program.uniforms_count * sizeof(gli_uniform));
+    shader_program.uniforms = malloc(shader_program.uniforms_count * sizeof(gli_shader_input_data));
     for (int j = 0; j < shader_program.uniforms_count; j++) {
-      GLsizei length;
-      GLint size;
-      GLenum type;
-      glGetActiveUniform(shader_program.program, j, max_length, &length, &size, &type, name_buffer);
-      shader_program.uniforms[j] = (gli_uniform) {
-        .name = strdup(name_buffer),
-        .location = glGetUniformLocation(shader_program.program, name_buffer),
-      };
+      glGetActiveUniform(
+        shader_program.program,
+        j,
+        max_length,
+        NULL,
+        &shader_program.uniforms[j].size,
+        &shader_program.uniforms[j].type,
+        name_buffer
+      );
+      shader_program.uniforms[j].name = strdup(name_buffer);
+      shader_program.uniforms[j].location = glGetUniformLocation(shader_program.program, name_buffer);
+    }
+
+    free(name_buffer);
+
+    glGetProgramiv(shader_program.program, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, &max_length);
+    name_buffer = malloc(max_length);
+
+    glGetProgramiv(shader_program.program, GL_ACTIVE_ATTRIBUTES, &shader_program.attributes_count);
+    shader_program.attributes = malloc(shader_program.attributes_count * sizeof(gli_shader_input_data));
+    for (int j = 0; j < shader_program.attributes_count; j++) {
+      glGetActiveAttrib(
+        shader_program.program,
+        j,
+        max_length,
+        NULL,
+        &shader_program.attributes[j].size,
+        &shader_program.attributes[j].type,
+        name_buffer
+      );
+      shader_program.attributes[j].name = strdup(name_buffer);
+      shader_program.attributes[j].location = glGetAttribLocation(shader_program.program, name_buffer);
     }
 
     free(name_buffer);
@@ -773,7 +815,9 @@ void glitchImport(ecs_world_t* world) {
   GLI_LOAD_PROC_ADDRESS(glLinkProgram);
   GLI_LOAD_PROC_ADDRESS(glGetProgramiv);
   GLI_LOAD_PROC_ADDRESS(glGetProgramInfoLog);
+  GLI_LOAD_PROC_ADDRESS(glGetActiveAttrib);
   GLI_LOAD_PROC_ADDRESS(glGetActiveUniform);
+  GLI_LOAD_PROC_ADDRESS(glGetAttribLocation);
   GLI_LOAD_PROC_ADDRESS(glGetUniformLocation);
   GLI_LOAD_PROC_ADDRESS(glGenVertexArrays);
   GLI_LOAD_PROC_ADDRESS(glDeleteVertexArrays);

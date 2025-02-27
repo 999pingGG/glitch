@@ -35,6 +35,8 @@ typedef intptr_t GLsizeiptr;
 #define GL_ARRAY_BUFFER 0x8892
 #define GL_ACTIVE_UNIFORM_MAX_LENGTH 0x8B87
 #define GL_ACTIVE_UNIFORMS 0x8B86
+#define GL_ACTIVE_ATTRIBUTE_MAX_LENGTH 0x8B8A
+#define GL_ACTIVE_ATTRIBUTES 0x8B89
 #endif
 
 #include <GL/gl.h>
@@ -56,14 +58,16 @@ typedef struct ShaderProgramSource {
   const char *vertex_shader, *fragment_shader;
 } ShaderProgramSource;
 
-typedef struct gli_uniform {
+typedef struct gli_shader_input_data {
   char* name;
   GLint location;
-} gli_uniform;
+  GLint size;
+  GLenum type;
+} gli_shader_input_data;
 
 typedef struct ShaderProgram {
-  gli_uniform* uniforms;
-  int uniforms_count;
+  gli_shader_input_data* uniforms, *attributes;
+  int uniforms_count, attributes_count;
   GLuint program;
 } ShaderProgram;
 
