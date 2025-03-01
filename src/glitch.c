@@ -650,7 +650,57 @@ void glitchImport(ecs_world_t* world) {
   ECS_COMPONENT_DEFINE(world, ShaderProgramSource);
   ECS_COMPONENT_DEFINE(world, ShaderProgram);
   ECS_COMPONENT_DEFINE(world, Camera2D);
+  ecs_struct(world, {
+    .entity = ecs_id(Camera2D),
+    .members = {
+      {
+        .name = "position",
+        .type = ecs_id(Position2D),
+        .offset = offsetof(Camera2D, position),
+      },
+      {
+        .name = "view_projection_matrix",
+        .type = ecs_id(vkm_mat4),
+        .offset = offsetof(Camera2D, view_projection_matrix),
+      },
+      {
+        .name = "zoom",
+        .type = ecs_id(ecs_f32_t),
+        .offset = offsetof(Camera2D, zoom),
+      },
+    },
+  });
   ECS_COMPONENT_DEFINE(world, Camera3D);
+  ecs_struct(world, {
+    .entity = ecs_id(Camera3D),
+    .members = {
+      {
+        .name = "position",
+        .type = ecs_id(Position3D),
+        .offset = offsetof(Camera3D, position),
+      },
+      {
+        .name = "view_projection_matrix",
+        .type = ecs_id(vkm_mat4),
+        .offset = offsetof(Camera3D, view_projection_matrix),
+      },
+      {
+        .name = "field_of_view",
+        .type = ecs_id(ecs_f32_t),
+        .offset = offsetof(Camera3D, field_of_view),
+      },
+      {
+        .name = "near_plane",
+        .type = ecs_id(ecs_f32_t),
+        .offset = offsetof(Camera3D, near_plane),
+      },
+      {
+        .name = "far_plane",
+        .type = ecs_id(ecs_f32_t),
+        .offset = offsetof(Camera3D, far_plane),
+      },
+    },
+  });
   ECS_COMPONENT_DEFINE(world, Color);
   ecs_add_pair(world, ecs_id(Color), EcsIsA, ecs_id(vkm_vec4));
   ECS_COMPONENT_DEFINE(world, ClearColor);
