@@ -67,17 +67,29 @@ int main(const int argc, char** argv) {
     { {  100.0f, -100.0f } },
     { {  100.0f,  100.0f } },
   };
-
-  const ecs_entity_t triangle_mesh = ecs_new(world);
-  ecs_set(world, triangle_mesh, MeshData, {
-    .vertices = triangle_vertices,
-    .vertices_count = GLI_COUNTOF(triangle_vertices),
+  
+  const ecs_entity_t triangle_mesh = ecs_entity(world, {
+    .set = ecs_values(
+      {
+        .type = ecs_id(MeshData),
+        .ptr = &(MeshData) {
+          .vertices = triangle_vertices,
+          .vertices_count = GLI_COUNTOF(triangle_vertices),
+        },
+      }
+    ),
   });
 
-  const ecs_entity_t rectangle_mesh = ecs_new(world);
-  ecs_set(world, rectangle_mesh, MeshData, {
-    .vertices = square_vertices,
-    .vertices_count = GLI_COUNTOF(square_vertices),
+  const ecs_entity_t square_mesh = ecs_entity(world, {
+    .set = ecs_values(
+      {
+        .type = ecs_id(MeshData),
+        .ptr = &(MeshData) {
+          .vertices = square_vertices,
+          .vertices_count = GLI_COUNTOF(square_vertices),
+        },
+      }
+    ),
   });
 
   static const char* vertex_shader_source = "#version 330 core\n"
@@ -92,14 +104,22 @@ int main(const int argc, char** argv) {
 
   static const char* fragment_shader_source = "#version 330 core\n"
     "out vec4 fragment_color;\n"
+    "\n"
     "void main() {\n"
     "  fragment_color = vec4(1.0, 0.5, 0.2, 1.0);\n"
     "}\n";
 
-  const ecs_entity_t shader_program = ecs_new(world);
-  ecs_set(world, shader_program, ShaderProgramSource, {
-    .vertex_shader = vertex_shader_source,
-    .fragment_shader = fragment_shader_source,
+  const ecs_entity_t shader_program = ecs_entity(world, {
+    .name = "Test shader program",
+    .set = ecs_values(
+      {
+        .type = ecs_id(ShaderProgramSource),
+        .ptr = &(ShaderProgramSource) {
+          .vertex_shader = vertex_shader_source,
+          .fragment_shader = fragment_shader_source,
+        },
+      }
+    ),
   });
 
   ecs_entity(world, {
@@ -119,7 +139,7 @@ int main(const int argc, char** argv) {
     .add = (ecs_id_t[]){
       ecs_id(Position2D),
       ecs_id(Lifetime),
-      ecs_pair(ecs_id(Uses), rectangle_mesh),
+      ecs_pair(ecs_id(Uses), square_mesh),
       ecs_pair(ecs_id(Uses), shader_program),
       0,
     },

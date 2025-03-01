@@ -25,7 +25,7 @@ typedef intptr_t GLsizeiptr;
 #define WGL_CONTEXT_MAJOR_VERSION_ARB 0x2091
 #define WGL_CONTEXT_MINOR_VERSION_ARB 0x2092
 #define WGL_CONTEXT_PROFILE_MASK_ARB 0x9126
-#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB 0x00000001
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB 0x0001
 
 #define GL_VERTEX_SHADER 0x8B31
 #define GL_FRAGMENT_SHADER 0x8B30
@@ -42,6 +42,7 @@ typedef intptr_t GLsizeiptr;
 #include <GL/gl.h>
 
 #define GLI_COUNTOF(array) (sizeof(array) / sizeof(array[0]))
+#define GLI_MAX_UNIFORMS 20
 
 typedef struct MeshData {
   // Currently, only a single vec2 vertex attribute is supported.
@@ -55,7 +56,9 @@ typedef struct Mesh {
 } Mesh;
 
 typedef struct ShaderProgramSource {
-  const char *vertex_shader, *fragment_shader;
+  ecs_entity_t uniform_components[GLI_MAX_UNIFORMS];
+  bool provided_by_entity[GLI_MAX_UNIFORMS];
+  const char* vertex_shader, *fragment_shader;
 } ShaderProgramSource;
 
 typedef struct gli_shader_input_data {
@@ -66,6 +69,7 @@ typedef struct gli_shader_input_data {
 } gli_shader_input_data;
 
 typedef struct ShaderProgram {
+  ecs_query_t* rendered_entities_query;
   gli_shader_input_data* uniforms, *attributes;
   int uniforms_count, attributes_count;
   GLuint program;
@@ -73,11 +77,13 @@ typedef struct ShaderProgram {
 
 typedef struct Camera2D {
   Position2D position;
+  vkm_mat4 view_projection_matrix;
   float zoom;
 } Camera2D;
 
 typedef struct Camera3D {
   Position3D position;
+  vkm_mat4 view_projection_matrix;
   float field_of_view, near_plane, far_plane;
 } Camera3D;
 
