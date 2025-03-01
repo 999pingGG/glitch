@@ -37,7 +37,7 @@ endif()
 if(UNIX AND NOT ANDROID)
   target_link_libraries(tests PRIVATE X11 GL)
 elseif(WIN32)
-  target_link_libraries(tests PRIVATE Opengl32)
+  target_link_libraries(tests PRIVATE ws2_32 Opengl32)
 endif()
 
 target_include_directories(tests PRIVATE include libs/flecs libs/cvkm)
