@@ -64,6 +64,31 @@ static LRESULT CALLBACK window_proc(HWND handle, UINT message, WPARAM w_param, L
 #define GLI_WIDTH 800
 #define GLI_HEIGHT 600
 
+// The amount of terms that we use in the ecs_query_desc_t::terms of the shader program.
+#define GLI_RESERVED_TERMS 5
+// This is less than the previous int because of EcsOr usage.
+#define GLI_SHADER_QUERY_TERMS 4
+
+#pragma region Built-in uniforms, update all of those together!
+#define GLI_BUILT_IN_UNIFORMS_COUNT 5
+
+typedef struct built_ins_t {
+  vkm_mat4 view_projection_matrix, model_matrix;
+  vkm_vec2 resolution;
+  float time, delta_time;
+} built_ins_t;
+
+static const char* built_in_names[] = {
+  "view_projection_matrix",
+  "model_matrix",
+  "resolution",
+  "time",
+  "delta_time",
+};
+
+static GLuint built_ins_uniform_buffer;
+#pragma endregion
+
 typedef GLuint (*glCreateShaderProc)(GLenum shaderType);
 static glCreateShaderProc glCreateShader;
 typedef void (*glDeleteShaderProc)(GLuint shader);
@@ -124,6 +149,8 @@ typedef void (*glDeleteBuffersProc)(GLsizei n, const GLuint *buffers);
 static glDeleteBuffersProc glDeleteBuffers;
 typedef void (*glBindBufferProc)(GLenum target, GLuint buffer);
 static glBindBufferProc glBindBuffer;
+typedef void (*glBindBufferRangeProc)(GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size);
+static glBindBufferRangeProc glBindBufferRange;
 typedef void (*glVertexAttribPointerProc)(
   GLuint index,
   GLint size,
@@ -139,6 +166,30 @@ typedef void (*glBufferDataProc)(GLenum target, GLsizeiptr size, const void *dat
 static glBufferDataProc glBufferData;
 typedef void (*glUseProgramProc)(GLuint program);
 static glUseProgramProc glUseProgram;
+typedef void (*glUniform1fvProc)(GLint location, GLsizei count, const GLfloat *value);
+static glUniform1fvProc glUniform1fv;
+typedef void (*glUniform2fvProc)(GLint location, GLsizei count, const GLfloat *value);
+static glUniform2fvProc glUniform2fv;
+typedef void (*glUniform3fvProc)(GLint location, GLsizei count, const GLfloat *value);
+static glUniform3fvProc glUniform3fv;
+typedef void (*glUniform4fvProc)(GLint location, GLsizei count, const GLfloat *value);
+static glUniform4fvProc glUniform4fv;
+typedef void (*glUniform1ivProc)(GLint location, GLsizei count, const GLint *value);
+static glUniform1ivProc glUniform1iv;
+typedef void (*glUniform2ivProc)(GLint location, GLsizei count, const GLint *value);
+static glUniform2ivProc glUniform2iv;
+typedef void (*glUniform3ivProc)(GLint location, GLsizei count, const GLint *value);
+static glUniform3ivProc glUniform3iv;
+typedef void (*glUniform4ivProc)(GLint location, GLsizei count, const GLint *value);
+static glUniform4ivProc glUniform4iv;
+typedef void (*glUniform1uivProc)(GLint location, GLsizei count, const GLuint *value);
+static glUniform1uivProc glUniform1uiv;
+typedef void (*glUniform2uivProc)(GLint location, GLsizei count, const GLuint *value);
+static glUniform2uivProc glUniform2uiv;
+typedef void (*glUniform3uivProc)(GLint location, GLsizei count, const GLuint *value);
+static glUniform3uivProc glUniform3uiv;
+typedef void (*glUniform4uivProc)(GLint location, GLsizei count, const GLuint *value);
+static glUniform4uivProc glUniform4uiv;
 typedef void (*glUniformMatrix4fvProc)(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
 static glUniformMatrix4fvProc glUniformMatrix4fv;
 
@@ -250,7 +301,15 @@ ECS_CTOR(ClearColor, ptr, {
 
 static GLuint compile_shader(const GLenum type, const char* source) {
   const GLuint shader = glCreateShader(type);
-  glShaderSource(shader, 1, &source, NULL);
+  static const char* shader_copypasta =
+    "#version 330 core\n"
+    "layout(std140) uniform built_ins {"
+      "mat4 view_projection_matrix, model_matrix;"
+      "vec2 resolution;"
+      "float time, delta_time;"
+    "};";
+  const char* sources[2] = { shader_copypasta, source };
+  glShaderSource(shader, 2, sources, NULL);
   glCompileShader(shader);
 
   GLint success;
@@ -337,18 +396,42 @@ static void CompileShaders(ecs_iter_t* it) {
 
     glGetProgramiv(shader_program.program, GL_ACTIVE_UNIFORMS, &shader_program.uniforms_count);
     shader_program.uniforms = malloc(shader_program.uniforms_count * sizeof(gli_shader_input_data));
-    for (int j = 0; j < shader_program.uniforms_count; j++) {
-      glGetActiveUniform(
-        shader_program.program,
-        j,
-        max_length,
-        NULL,
-        &shader_program.uniforms[j].size,
-        &shader_program.uniforms[j].type,
-        name_buffer
+    for (int j = 0, skipped = 0; j < shader_program.uniforms_count; j++) {
+      gli_shader_input_data* uniform = shader_program.uniforms + j - skipped;
+
+      GLint size;
+      glGetActiveUniform(shader_program.program, j, max_length, NULL, &size, &uniform->type, name_buffer);
+
+      // Pretend built-in uniforms don't exist here.
+      for (unsigned k = 0; k < GLI_COUNTOF(built_in_names); k++) {
+        if (strcmp(name_buffer, built_in_names[k]) == 0) {
+          skipped++;
+          goto next;
+        }
+      }
+
+      uniform->name = strdup(name_buffer);
+      uniform->location = glGetUniformLocation(shader_program.program, name_buffer);
+      next:;
+    }
+
+    // Assuming we always insert all the built-in uniforms into the shader code.
+    shader_program.uniforms_count -= GLI_BUILT_IN_UNIFORMS_COUNT;
+    assert(shader_program.uniforms_count >= 0);
+    if (shader_program.uniforms_count > GLI_MAX_UNIFORMS) {
+      // Trim the excess uniforms in case there's too many of them.
+      shader_program.uniforms_count = GLI_MAX_UNIFORMS;
+    }
+
+    // Compact memory.
+    if (shader_program.uniforms_count > 0) {
+      shader_program.uniforms = realloc(
+        shader_program.uniforms,
+        shader_program.uniforms_count * sizeof(gli_shader_input_data)
       );
-      shader_program.uniforms[j].name = strdup(name_buffer);
-      shader_program.uniforms[j].location = glGetUniformLocation(shader_program.program, name_buffer);
+    } else {
+      free(shader_program.uniforms);
+      shader_program.uniforms = NULL;
     }
 
     free(name_buffer);
@@ -359,12 +442,13 @@ static void CompileShaders(ecs_iter_t* it) {
     glGetProgramiv(shader_program.program, GL_ACTIVE_ATTRIBUTES, &shader_program.attributes_count);
     shader_program.attributes = malloc(shader_program.attributes_count * sizeof(gli_shader_input_data));
     for (int j = 0; j < shader_program.attributes_count; j++) {
+      GLint size;
       glGetActiveAttrib(
         shader_program.program,
         j,
         max_length,
         NULL,
-        &shader_program.attributes[j].size,
+        &size,
         &shader_program.attributes[j].type,
         name_buffer
       );
@@ -374,7 +458,9 @@ static void CompileShaders(ecs_iter_t* it) {
 
     free(name_buffer);
 
-    static const int reserved_terms = 5;
+    // Build the query to find all entities which provide the needed uniforms.
+
+    // If you change the terms here, remember to update the static variable called "reserved_terms"!!
     ecs_query_desc_t query_description = {
       .terms = {
         {
@@ -404,21 +490,129 @@ static void CompileShaders(ecs_iter_t* it) {
       },
       .cache_kind = EcsQueryCacheAuto,
     };
-    for (
-      int j = reserved_terms;
-      source->uniform_components[j] && j < (int)GLI_COUNTOF(source->uniform_components) + reserved_terms;
-      j++
-    ) {
-      const int uniform_index = j - reserved_terms;
 
-      query_description.terms[j] = (ecs_term_t){
-        .id = source->uniform_components[uniform_index],
-        .src = (ecs_term_ref_t){
-          .id = source->provided_by_entity[uniform_index] ? 0 : it->entities[i],
-        },
+    for (int j = 0, count = shader_program.uniforms_count, skipped_uniforms = 0; j < count; j++) {
+      gli_shader_input_data* uniform = shader_program.uniforms + j - skipped_uniforms;
+      uint8_t* ecs_uniform_type = shader_program.ecs_uniform_types + j - skipped_uniforms;
+
+      const bool provided_by_entity = strncmp("entity", uniform->name, 6) == 0;
+      const char* component_name = uniform->name + (provided_by_entity ? 6 : 0);
+
+      const ecs_entity_t component = ecs_lookup_symbol(it->world, component_name, false, false);
+      if (!component) {
+        printf("Component %s not found.\n", component_name);
+        goto invalid_component;
+      }
+
+      bool type_matches = false;
+      const EcsPrimitive* primitive = ecs_get(it->world, component, EcsPrimitive);
+      switch (uniform->type) {
+        case GL_FLOAT:
+          type_matches = primitive->kind == EcsF32;
+          *ecs_uniform_type = GLI_FLOAT;
+          break;
+        case GL_INT:
+          type_matches = primitive->kind == EcsI32;
+          *ecs_uniform_type = GLI_INT;
+          break;
+        case GL_UNSIGNED_INT:
+          type_matches = primitive->kind == EcsU32;
+          *ecs_uniform_type = GLI_UINT;
+          break;
+      }
+
+      if (!type_matches) {
+        switch (uniform->type) {
+          case GL_FLOAT_VEC2:
+            type_matches = ecs_has_pair(it->world, component, EcsIsA, ecs_id(vkm_vec2));
+            *ecs_uniform_type = GLI_VEC2;
+            break;
+          case GL_FLOAT_VEC3:
+            type_matches = ecs_has_pair(it->world, component, EcsIsA, ecs_id(vkm_vec3));
+            *ecs_uniform_type = GLI_VEC3;
+            break;
+          case GL_FLOAT_VEC4:
+            type_matches = ecs_has_pair(it->world, component, EcsIsA, ecs_id(vkm_vec4));
+            *ecs_uniform_type = GLI_VEC4;
+            break;
+          case GL_INT_VEC2:
+            type_matches = ecs_has_pair(it->world, component, EcsIsA, ecs_id(vkm_ivec2));
+            *ecs_uniform_type = GLI_IVEC2;
+            break;
+          case GL_INT_VEC3:
+            type_matches = ecs_has_pair(it->world, component, EcsIsA, ecs_id(vkm_ivec3));
+            *ecs_uniform_type = GLI_IVEC3;
+            break;
+          case GL_INT_VEC4:
+            type_matches = ecs_has_pair(it->world, component, EcsIsA, ecs_id(vkm_ivec4));
+            *ecs_uniform_type = GLI_IVEC4;
+            break;
+          case GL_UNSIGNED_INT_VEC2:
+            type_matches = ecs_has_pair(it->world, component, EcsIsA, ecs_id(vkm_uvec2));
+            *ecs_uniform_type = GLI_UVEC2;
+            break;
+          case GL_UNSIGNED_INT_VEC3:
+            type_matches = ecs_has_pair(it->world, component, EcsIsA, ecs_id(vkm_uvec3));
+            *ecs_uniform_type = GLI_UVEC3;
+            break;
+          case GL_UNSIGNED_INT_VEC4:
+            type_matches = ecs_has_pair(it->world, component, EcsIsA, ecs_id(vkm_uvec4));
+            *ecs_uniform_type = GLI_UVEC4;
+            break;
+          case GL_FLOAT_MAT4:
+            type_matches = ecs_has_pair(it->world, component, EcsIsA, ecs_id(vkm_mat4));
+            *ecs_uniform_type = GLI_MAT4;
+            break;
+          default:
+            break;
+        }
+      }
+
+      if (!type_matches) {
+        char buffer[22];
+        const char* name = ecs_get_name(it->world, component);
+        if (!name) {
+          name = ecs_get_symbol(it->world, component);
+        }
+        if (!name) {
+          sprintf(buffer, "#%llu", (unsigned long long)component);
+        }
+        printf(
+          "The type of the component %s doesn't match the type the shader requires (0x%x).\n",
+          name ? name : buffer,
+          uniform->type
+        );
+        goto invalid_component;
+      }
+
+      query_description.terms[j + GLI_RESERVED_TERMS - skipped_uniforms] = (ecs_term_t){
+        .id = component,
+        .src.id = provided_by_entity ? 0 : it->entities[i],
         .inout = EcsIn,
       };
+
+      continue;
+
+    invalid_component:
+      // Delete the uniform registry.
+      shader_program.uniforms_count--;
+      assert(shader_program.uniforms_count >= 0);
+
+      if (shader_program.uniforms_count > 0) {
+        memmove(
+          shader_program.uniforms + j - skipped_uniforms,
+          shader_program.uniforms + j - skipped_uniforms + 1,
+          (shader_program.uniforms_count - j + skipped_uniforms) * sizeof(gli_shader_input_data)
+        );
+        shader_program.uniforms = realloc(shader_program.uniforms, shader_program.uniforms_count * sizeof(gli_shader_input_data));
+      } else {
+        free(shader_program.uniforms);
+        shader_program.uniforms = NULL;
+      }
+
+      skipped_uniforms++;
     }
+
     shader_program.rendered_entities_query = ecs_query_init(it->world, &query_description);
 
     ecs_set_id(it->world, it->entities[i], ecs_id(ShaderProgram), sizeof(ShaderProgram), &shader_program);
@@ -427,16 +621,6 @@ static void CompileShaders(ecs_iter_t* it) {
     glDeleteShader(vertex_shader);
     glDeleteShader(fragment_shader);
   }
-}
-
-static GLint get_uniform_location(const ShaderProgram* program, const char* uniform_name) {
-  for (int i = 0; i < program->uniforms_count; i++) {
-    if (strcmp(uniform_name, program->uniforms[i].name) == 0) {
-      return program->uniforms[i].location;
-    }
-  }
-
-  return -1;
 }
 
 static void PreRenderFrame(ecs_iter_t* it) {
@@ -518,43 +702,46 @@ static void Render(ecs_iter_t* it) {
   const Camera2D* camera_2d = ecs_field(it, Camera2D, 1);
   const Camera3D* camera_3d = ecs_field(it, Camera3D, 2);
 
+  // No camera? No rendering.
+  static bool warned = false;
+  if (!camera_2d && !camera_3d) {
+    if (!warned) {
+      warned = true;
+      printf("Missing both 2D and 3D cameras!\n");
+    }
+    return;
+  }
+
+  warned = false;
+
+  built_ins_t built_ins = {
+    .resolution = { { GLI_WIDTH, GLI_HEIGHT } },
+    .time = (float)ecs_get_world_info(it->world)->world_time_total,
+    .delta_time = it->delta_time,
+  };
+
   for (int i = 0; i < it->count; i++) {
     const ShaderProgram* shader_program = shader_programs + i;
 
     glUseProgram(shader_program->program);
-    const GLint view_projection_matrix_location = get_uniform_location(shader_program, "view_projection_matrix");
-    const GLint model_matrix_location = get_uniform_location(shader_program, "model_matrix");
 
     ecs_iter_t rendered_entities_it = ecs_query_iter(it->world, shader_program->rendered_entities_query);
     while (ecs_query_next(&rendered_entities_it)) {
       const bool is_2d = ecs_field_id(&rendered_entities_it, 0) == ecs_id(Position2D);
 
-      // If the shader requires a camera, check that it exists and set the matrix,
-      // or skip the rendering of this table of entities completely.
-      if (view_projection_matrix_location >= 0) {
-        if (is_2d) {
-          if (!camera_2d) {
-            continue;
-          }
-
-          glUniformMatrix4fv(
-            view_projection_matrix_location,
-            1,
-            GL_FALSE,
-            (const GLfloat*)camera_2d->view_projection_matrix.raw
-          );
-        } else {
-          if (!camera_3d) {
-            continue;
-          }
-
-          glUniformMatrix4fv(
-            view_projection_matrix_location,
-            1,
-            GL_FALSE,
-            (const GLfloat*)camera_3d->view_projection_matrix.raw
-          );
+      // Skip the rendering of this table of entities completely if the required camera isn't present.
+      if (is_2d) {
+        if (!camera_2d) {
+          continue;
         }
+
+        built_ins.view_projection_matrix = camera_2d->view_projection_matrix;
+      } else {
+        if (!camera_3d) {
+          continue;
+        }
+
+        built_ins.view_projection_matrix = camera_3d->view_projection_matrix;
       }
 
       const void* positions = ecs_table_get_id(
@@ -564,21 +751,87 @@ static void Render(ecs_iter_t* it) {
         rendered_entities_it.offset
       );
       const Mesh* mesh = ecs_field(&rendered_entities_it, Mesh, 3);
+      const void* uniform_components[GLI_MAX_UNIFORMS] = { 0 };
+      for (int j = 0; j < shader_program->uniforms_count; j++) {
+        const int8_t field_index = (int8_t)(j + GLI_SHADER_QUERY_TERMS);
+        uniform_components[j] = ecs_field_w_size(
+          &rendered_entities_it,
+          ecs_field_size(&rendered_entities_it, field_index),
+          field_index
+        );
+      }
+
       glBindVertexArray(mesh->vertex_array_object);
 
       for (int j = 0; j < rendered_entities_it.count; j++) {
-        if (model_matrix_location >= 0) {
-          vkm_mat4 model_matrix = CVKM_MAT4_IDENTITY;
+        built_ins.model_matrix = CVKM_MAT4_IDENTITY;
 
-          if (is_2d) {
-            const Position2D* position = (Position2D*)positions + i;
-            vkm_translate(&model_matrix, position);
-          } else {
-            const Position3D* position = (Position3D*)positions + i;
-            vkm_translate(&model_matrix, position);
+        if (is_2d) {
+          const Position2D* position = (Position2D*)positions + i;
+          vkm_translate(&built_ins.model_matrix, position);
+        } else {
+          const Position3D* position = (Position3D*)positions + i;
+          vkm_translate(&built_ins.model_matrix, position);
+        }
+
+        glBindBuffer(GL_UNIFORM_BUFFER, built_ins_uniform_buffer);
+        glBufferData(GL_UNIFORM_BUFFER, sizeof(built_ins_t), &built_ins, GL_STREAM_DRAW);
+
+        // Set per-entity uniforms.
+        for (int k = 0; k < shader_program->uniforms_count; k++) {
+          const gli_data_type_t data_type = shader_program->ecs_uniform_types[k];
+          if (!data_type) {
+            continue;
           }
 
-          glUniformMatrix4fv(model_matrix_location, 1, GL_FALSE, (const GLfloat*)model_matrix.raw);
+          switch (data_type) {
+            case GLI_INT:
+              glUniform1iv(shader_program->uniforms[k].location, 1, (GLint*)uniform_components[k] + j);
+              break;
+            case GLI_UINT:
+              glUniform1uiv(shader_program->uniforms[k].location, 1, (GLuint*)uniform_components[k] + j);
+              break;
+            case GLI_FLOAT:
+              glUniform1fv(shader_program->uniforms[k].location, 1, (GLfloat*)uniform_components[k] + j);
+              break;
+            case GLI_IVEC2:
+              glUniform2iv(shader_program->uniforms[k].location, 1, (GLint*)uniform_components[k] + j);
+              break;
+            case GLI_UVEC2:
+              glUniform2uiv(shader_program->uniforms[k].location, 1, (GLuint*)uniform_components[k] + j);
+              break;
+            case GLI_VEC2:
+              glUniform2fv(shader_program->uniforms[k].location, 1, (GLfloat*)uniform_components[k] + j);
+              break;
+            case GLI_IVEC3:
+              glUniform3iv(shader_program->uniforms[k].location, 1, (GLint*)uniform_components[k] + j);
+              break;
+            case GLI_UVEC3:
+              glUniform3uiv(shader_program->uniforms[k].location, 1, (GLuint*)uniform_components[k] + j);
+              break;
+            case GLI_VEC3:
+              glUniform3fv(shader_program->uniforms[k].location, 1, (GLfloat*)uniform_components[k] + j);
+              break;
+            case GLI_IVEC4:
+              glUniform4iv(shader_program->uniforms[k].location, 1, (GLint*)uniform_components[k] + j);
+              break;
+            case GLI_UVEC4:
+              glUniform4uiv(shader_program->uniforms[k].location, 1, (GLuint*)uniform_components[k] + j);
+              break;
+            case GLI_VEC4:
+              glUniform4fv(shader_program->uniforms[k].location, 1, (GLfloat*)uniform_components[k] + j);
+              break;
+            case GLI_MAT4:
+              glUniformMatrix4fv(
+                shader_program->uniforms[k].location,
+                1,
+                GL_FALSE,
+                (GLfloat*)uniform_components[k] + j
+              );
+              break;
+            default:
+              assert(false);
+          }
         }
 
         glDrawArrays(GL_TRIANGLES, 0, mesh->vertices_count);
@@ -960,10 +1213,23 @@ void glitchImport(ecs_world_t* world) {
   GLI_LOAD_PROC_ADDRESS(glGenBuffers);
   GLI_LOAD_PROC_ADDRESS(glDeleteBuffers);
   GLI_LOAD_PROC_ADDRESS(glBindBuffer);
+  GLI_LOAD_PROC_ADDRESS(glBindBufferRange);
   GLI_LOAD_PROC_ADDRESS(glVertexAttribPointer);
   GLI_LOAD_PROC_ADDRESS(glEnableVertexAttribArray);
   GLI_LOAD_PROC_ADDRESS(glBufferData);
   GLI_LOAD_PROC_ADDRESS(glUseProgram);
+  GLI_LOAD_PROC_ADDRESS(glUniform1fv);
+  GLI_LOAD_PROC_ADDRESS(glUniform2fv);
+  GLI_LOAD_PROC_ADDRESS(glUniform3fv);
+  GLI_LOAD_PROC_ADDRESS(glUniform4fv);
+  GLI_LOAD_PROC_ADDRESS(glUniform1iv);
+  GLI_LOAD_PROC_ADDRESS(glUniform2iv);
+  GLI_LOAD_PROC_ADDRESS(glUniform3iv);
+  GLI_LOAD_PROC_ADDRESS(glUniform4iv);
+  GLI_LOAD_PROC_ADDRESS(glUniform1uiv);
+  GLI_LOAD_PROC_ADDRESS(glUniform2uiv);
+  GLI_LOAD_PROC_ADDRESS(glUniform3uiv);
+  GLI_LOAD_PROC_ADDRESS(glUniform4uiv);
   GLI_LOAD_PROC_ADDRESS(glUniformMatrix4fv);
 
   ECS_SYSTEM(world, MakeMeshes, EcsOnLoad, [in] MeshData, [out] !Mesh);
@@ -985,6 +1251,13 @@ void glitchImport(ecs_world_t* world) {
   ECS_SYSTEM(world, PostRenderFrame, EcsPostFrame, 0);
 
   ecs_singleton_add(world, ClearColor);
+  ecs_singleton_add(world, Camera2D);
+  ecs_singleton_add(world, Camera3D);
+
+  glGenBuffers(1, &built_ins_uniform_buffer);
+  glBindBuffer(GL_UNIFORM_BUFFER, built_ins_uniform_buffer);
+  glBufferData(GL_UNIFORM_BUFFER, sizeof(built_ins_t), NULL, GL_STREAM_DRAW);
+  glBindBufferRange(GL_UNIFORM_BUFFER, 0, built_ins_uniform_buffer, 0, sizeof(built_ins_t));
 }
 
 #ifndef _MSC_VER

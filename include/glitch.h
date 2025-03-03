@@ -21,6 +21,7 @@
 
 typedef char GLchar;
 typedef intptr_t GLsizeiptr;
+typedef intptr_t GLintptr;
 
 #define WGL_CONTEXT_MAJOR_VERSION_ARB 0x2091
 #define WGL_CONTEXT_MINOR_VERSION_ARB 0x2092
@@ -37,12 +38,69 @@ typedef intptr_t GLsizeiptr;
 #define GL_ACTIVE_UNIFORMS 0x8B86
 #define GL_ACTIVE_ATTRIBUTE_MAX_LENGTH 0x8B8A
 #define GL_ACTIVE_ATTRIBUTES 0x8B89
+#define GL_UNIFORM_BUFFER 0x8A11
+#define GL_STREAM_DRAW 0x88E0
+#define GL_FLOAT_VEC2 0x8B50
+#define GL_FLOAT_VEC3 0x8B51
+#define GL_FLOAT_VEC4 0x8B52
+#define GL_INT_VEC2 0x8B53
+#define GL_INT_VEC3 0x8B54
+#define GL_INT_VEC4 0x8B55
+#define GL_UNSIGNED_INT_VEC2 0x8DC6
+#define GL_UNSIGNED_INT_VEC3 0x8DC7
+#define GL_UNSIGNED_INT_VEC4 0x8DC8
+#define GL_FLOAT_MAT4 0x8B5C
 #endif
 
 #include <GL/gl.h>
 
 #define GLI_COUNTOF(array) (sizeof(array) / sizeof(array[0]))
 #define GLI_MAX_UNIFORMS 20
+
+typedef enum gli_data_type_t {
+  GLI_BYTE = 1,
+  GLI_UBYTE,
+  GLI_SHORT,
+  GLI_USHORT,
+  GLI_INT,
+  GLI_UINT,
+  GLI_LONG,
+  GLI_ULONG,
+  GLI_FLOAT,
+  GLI_DOUBLE,
+  GLI_BVEC2,
+  GLI_UBVEC2,
+  GLI_SVEC2,
+  GLI_USVEC2,
+  GLI_IVEC2,
+  GLI_UVEC2,
+  GLI_LVEC2,
+  GLI_ULVEC2,
+  GLI_VEC2,
+  GLI_DVEC2,
+  GLI_BVEC3,
+  GLI_UBVEC3,
+  GLI_SVEC3,
+  GLI_USVEC3,
+  GLI_IVEC3,
+  GLI_UVEC3,
+  GLI_LVEC3,
+  GLI_ULVEC3,
+  GLI_VEC3,
+  GLI_DVEC3,
+  GLI_BVEC4,
+  GLI_UBVEC4,
+  GLI_SVEC4,
+  GLI_USVEC4,
+  GLI_IVEC4,
+  GLI_UVEC4,
+  GLI_LVEC4,
+  GLI_ULVEC4,
+  GLI_VEC4,
+  GLI_DVEC4,
+  GLI_MAT4,
+  GLI_DATA_TYPE_MAX,
+} gli_data_type_t;
 
 typedef struct MeshData {
   // Currently, only a single vec2 vertex attribute is supported.
@@ -56,15 +114,12 @@ typedef struct Mesh {
 } Mesh;
 
 typedef struct ShaderProgramSource {
-  ecs_entity_t uniform_components[GLI_MAX_UNIFORMS];
-  bool provided_by_entity[GLI_MAX_UNIFORMS];
   const char* vertex_shader, *fragment_shader;
 } ShaderProgramSource;
 
 typedef struct gli_shader_input_data {
   char* name;
   GLint location;
-  GLint size;
   GLenum type;
 } gli_shader_input_data;
 
@@ -73,6 +128,8 @@ typedef struct ShaderProgram {
   gli_shader_input_data* uniforms, *attributes;
   int uniforms_count, attributes_count;
   GLuint program;
+  // The type of this one is actually gli_data_type_t
+  uint8_t ecs_uniform_types[GLI_MAX_UNIFORMS];
 } ShaderProgram;
 
 typedef struct Camera2D {

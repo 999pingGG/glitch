@@ -9,13 +9,19 @@ typedef float Lifetime;
 static ECS_COMPONENT_DECLARE(Lifetime);
 typedef float TimeScale;
 static ECS_COMPONENT_DECLARE(TimeScale);
+typedef vkm_vec4 Tint;
+static ECS_COMPONENT_DECLARE(Tint);
 
 static ECS_CTOR(Lifetime, ptr, {
   *ptr = 0;
 })
 
 static ECS_CTOR(TimeScale, ptr, {
-  *ptr = 1;
+  *ptr = 1.0f;
+})
+
+static ECS_CTOR(Tint, ptr, {
+  *ptr = (vkm_vec4){ { 1.0f, 1.0f, 1.0f, 1.0f } };
 })
 
 static void Age(ecs_iter_t* it) {
@@ -48,6 +54,10 @@ int main(const int argc, char** argv) {
   ECS_COMPONENT_DEFINE(world, TimeScale);
   ecs_primitive(world, { .entity = ecs_id(TimeScale), .kind = EcsF32 });
   ecs_set_hooks(world, TimeScale, { .ctor = ecs_ctor(TimeScale) });
+
+  ECS_COMPONENT_DEFINE(world, Tint);
+  ecs_add_pair(world, ecs_id(Tint), EcsIsA, ecs_id(vkm_vec4));
+  ecs_set_hooks(world, Tint, { .ctor = ecs_ctor(Tint) });
 
   ECS_SYSTEM(world, Age, EcsOnUpdate, [inout] Lifetime, [in] TimeScale);
   ECS_SYSTEM(world, Move, EcsOnUpdate, [out] cvkm.Position2D, [in] Lifetime);
@@ -92,21 +102,24 @@ int main(const int argc, char** argv) {
     ),
   });
 
-  static const char* vertex_shader_source = "#version 330 core\n"
+  static const char* vertex_shader_source =
     "layout(location = 0) in vec2 position;\n"
-    "\n"
-    "uniform mat4 view_projection_matrix;\n"
-    "uniform mat4 model_matrix;\n"
     "\n"
     "void main() {\n"
     "  gl_Position = view_projection_matrix * model_matrix * vec4(position, 0.0, 1.0);\n"
     "}\n";
 
-  static const char* fragment_shader_source = "#version 330 core\n"
+  static const char* fragment_shader_source =
     "out vec4 fragment_color;\n"
     "\n"
+    "uniform vec4 entityColor;\n"
+    "uniform float does_not_exist = 1.0;\n"
+    "uniform float entityTimeScale;\n"
+    "uniform vec4 Tint;\n"
+    "uniform int unused;\n"
+    "\n"
     "void main() {\n"
-    "  fragment_color = vec4(1.0, 0.5, 0.2, 1.0);\n"
+    "  fragment_color = entityColor * Tint * (sin(time * entityTimeScale) * 0.5 + 0.5) * does_not_exist;\n"
     "}\n";
 
   const ecs_entity_t shader_program = ecs_entity(world, {
@@ -118,38 +131,41 @@ int main(const int argc, char** argv) {
           .vertex_shader = vertex_shader_source,
           .fragment_shader = fragment_shader_source,
         },
+      },
+      {
+        .type = ecs_id(Tint),
+        .ptr = &(Tint){ { 1.5f, 1.5f, 1.5f, 1.0f } },
       }
     ),
   });
 
   ecs_entity(world, {
     .name = "Triangle",
-    .add = (ecs_id_t[]){
+    .add = ecs_ids(
       ecs_id(TimeScale),
       ecs_id(Position2D),
       ecs_id(Lifetime),
       ecs_pair(ecs_id(Uses), triangle_mesh),
-      ecs_pair(ecs_id(Uses), shader_program),
-      0,
-    },
+      ecs_pair(ecs_id(Uses), shader_program)
+    ),
+    .set = ecs_values(
+      { .type = ecs_id(Color), .ptr = &(Color) { { 1.0f, 0.0f, 0.0f, 1.0f } } }
+    ),
   });
 
   ecs_entity(world, {
     .name = "Square",
-    .add = (ecs_id_t[]){
+    .add = ecs_ids(
       ecs_id(Position2D),
       ecs_id(Lifetime),
       ecs_pair(ecs_id(Uses), square_mesh),
-      ecs_pair(ecs_id(Uses), shader_program),
-      0,
-    },
-    .set = (ecs_value_t[]) {
+      ecs_pair(ecs_id(Uses), shader_program)
+    ),
+    .set = ecs_values(
       { .type = ecs_id(TimeScale), .ptr = &(float){ 2.0f } },
-      { 0 },
-    },
+      { .type = ecs_id(Color), .ptr = &(Color) { { 0.0f, 1.0f, 0.0f, 1.0f } } }
+    ),
   });
-
-  ecs_singleton_add(world, Camera2D);
 
   ecs_app_run(world, &(ecs_app_desc_t){
     .target_fps = 60,
