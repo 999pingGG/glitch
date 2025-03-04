@@ -160,6 +160,8 @@ typedef void (*glVertexAttribPointerProc)(
   const void* pointer
 );
 static glVertexAttribPointerProc glVertexAttribPointer;
+typedef void (*glVertexAttribIPointerProc)(GLuint index, GLint size, GLenum type, GLsizei stride, const void* pointer);
+static glVertexAttribIPointerProc glVertexAttribIPointer;
 typedef void (*glEnableVertexAttribArrayProc)(GLuint index);
 static glEnableVertexAttribArrayProc glEnableVertexAttribArray;
 typedef void (*glBufferDataProc)(GLenum target, GLsizeiptr size, const void *data, GLenum usage);
@@ -209,13 +211,13 @@ ECS_CTOR(MeshData, ptr, {
 })
 
 ECS_MOVE(MeshData, dst, src, {
-  // free(dst->vertices);
+  free(dst->data);
   *dst = *src;
   *src = (MeshData){ 0 };
 })
 
 ECS_DTOR(MeshData, ptr, {
-  // free(ptr->vertices);
+  free(ptr->data);
   *ptr = (MeshData){ 0 };
 })
 
@@ -241,15 +243,15 @@ ECS_CTOR(ShaderProgramSource, ptr, {
 })
 
 ECS_MOVE(ShaderProgramSource, dst, src, {
-  // free(dst->vertex_shader);
-  // free(dst->fragment_shader);
+  free(dst->vertex_shader);
+  free(dst->fragment_shader);
   *dst = *src;
   *src = (ShaderProgramSource){ 0 };
 })
 
 ECS_DTOR(ShaderProgramSource, ptr, {
-  // free(ptr->vertex_shader);
-  // free(ptr->fragment_shader);
+  free(ptr->vertex_shader);
+  free(ptr->fragment_shader);
   *ptr = (ShaderProgramSource){ 0 };
 })
 
@@ -325,6 +327,42 @@ static GLuint compile_shader(const GLenum type, const char* source) {
   return shader;
 }
 
+typedef struct gli_type_info_t {
+  GLenum type;
+  short vector_components, size;
+} gli_type_info_t;
+
+static gli_type_info_t type_infos[] = {
+  [GLI_BYTE]   = { .type = GL_BYTE,           .vector_components = 1, .size = 1  },
+  [GLI_UBYTE]  = { .type = GL_UNSIGNED_BYTE,  .vector_components = 1, .size = 1  },
+  [GLI_SHORT]  = { .type = GL_SHORT,          .vector_components = 1, .size = 2  },
+  [GLI_USHORT] = { .type = GL_UNSIGNED_SHORT, .vector_components = 1, .size = 2  },
+  [GLI_INT]    = { .type = GL_INT,            .vector_components = 1, .size = 4  },
+  [GLI_UINT]   = { .type = GL_UNSIGNED_INT,   .vector_components = 1, .size = 4  },
+  [GLI_FLOAT]  = { .type = GL_FLOAT,          .vector_components = 1, .size = 4  },
+  [GLI_BVEC2]  = { .type = GL_BYTE,           .vector_components = 2, .size = 2  },
+  [GLI_UBVEC2] = { .type = GL_UNSIGNED_BYTE,  .vector_components = 2, .size = 2  },
+  [GLI_SVEC2]  = { .type = GL_SHORT,          .vector_components = 2, .size = 4  },
+  [GLI_USVEC2] = { .type = GL_UNSIGNED_SHORT, .vector_components = 2, .size = 4  },
+  [GLI_IVEC2]  = { .type = GL_INT,            .vector_components = 2, .size = 8  },
+  [GLI_UVEC2]  = { .type = GL_UNSIGNED_INT,   .vector_components = 2, .size = 8  },
+  [GLI_VEC2]   = { .type = GL_FLOAT,          .vector_components = 2, .size = 8  },
+  [GLI_BVEC3]  = { .type = GL_BYTE,           .vector_components = 3, .size = 3  },
+  [GLI_UBVEC3] = { .type = GL_UNSIGNED_BYTE,  .vector_components = 3, .size = 3  },
+  [GLI_SVEC3]  = { .type = GL_SHORT,          .vector_components = 3, .size = 6  },
+  [GLI_USVEC3] = { .type = GL_UNSIGNED_SHORT, .vector_components = 3, .size = 6  },
+  [GLI_IVEC3]  = { .type = GL_INT,            .vector_components = 3, .size = 12 },
+  [GLI_UVEC3]  = { .type = GL_UNSIGNED_INT,   .vector_components = 3, .size = 12 },
+  [GLI_VEC3]   = { .type = GL_FLOAT,          .vector_components = 3, .size = 12 },
+  [GLI_BVEC4]  = { .type = GL_BYTE,           .vector_components = 4, .size = 4  },
+  [GLI_UBVEC4] = { .type = GL_UNSIGNED_BYTE,  .vector_components = 4, .size = 4  },
+  [GLI_SVEC4]  = { .type = GL_SHORT,          .vector_components = 4, .size = 8  },
+  [GLI_USVEC4] = { .type = GL_UNSIGNED_SHORT, .vector_components = 4, .size = 8  },
+  [GLI_IVEC4]  = { .type = GL_INT,            .vector_components = 4, .size = 16 },
+  [GLI_UVEC4]  = { .type = GL_UNSIGNED_INT,   .vector_components = 4, .size = 16 },
+  [GLI_VEC4]   = { .type = GL_FLOAT,          .vector_components = 4, .size = 16 },
+};
+
 static void MakeMeshes(ecs_iter_t* it) {
   const MeshData* mesh_datas = ecs_field(it, MeshData, 0);
 
@@ -343,15 +381,29 @@ static void MakeMeshes(ecs_iter_t* it) {
 
     ecs_modified(it->world, it->entities[i], Mesh);
 
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (const GLvoid*)0);
-    glEnableVertexAttribArray(0);
+    // As we iterate the vertex attributes, the buffer size serves as an offset, too.
+    GLsizeiptr buffer_size = 0;
+    for (int j = 0; mesh_data->vertex_attributes[j].type && j < GLI_MAX_ATTRIBUTES; j++) {
+      const gli_type_info_t info = type_infos[mesh_data->vertex_attributes[j].type];
 
-    glBufferData(
-      GL_ARRAY_BUFFER,
-      (GLsizeiptr)(mesh_data->vertices_count * sizeof(vkm_vec2)),
-      mesh_data->vertices,
-      GL_STATIC_DRAW
-    );
+      if (info.type == GL_FLOAT || mesh_data->vertex_attributes[j].convert_to_float) {
+        glVertexAttribPointer(
+          j,
+          info.vector_components,
+          info.type,
+          mesh_data->vertex_attributes[j].is_normalized,
+          0,
+          (const GLvoid*)buffer_size
+        );
+      } else {
+        glVertexAttribIPointer(j, info.vector_components, info.type, 0, (const GLvoid*)buffer_size);
+      }
+
+      glEnableVertexAttribArray(j);
+      buffer_size += info.size * mesh_data->vertices_count;
+    }
+
+    glBufferData(GL_ARRAY_BUFFER, buffer_size, mesh_data->data, GL_STATIC_DRAW);
 
     ecs_remove(it->world, it->entities[i], MeshData);
   }
@@ -1215,6 +1267,7 @@ void glitchImport(ecs_world_t* world) {
   GLI_LOAD_PROC_ADDRESS(glBindBuffer);
   GLI_LOAD_PROC_ADDRESS(glBindBufferRange);
   GLI_LOAD_PROC_ADDRESS(glVertexAttribPointer);
+  GLI_LOAD_PROC_ADDRESS(glVertexAttribIPointer);
   GLI_LOAD_PROC_ADDRESS(glEnableVertexAttribArray);
   GLI_LOAD_PROC_ADDRESS(glBufferData);
   GLI_LOAD_PROC_ADDRESS(glUseProgram);

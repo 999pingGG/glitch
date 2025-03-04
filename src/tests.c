@@ -63,28 +63,51 @@ int main(const int argc, char** argv) {
   ECS_SYSTEM(world, Move, EcsOnUpdate, [out] cvkm.Position2D, [in] Lifetime);
 
   // Equilateral triangle
-  static const vkm_vec2 triangle_vertices[] = {
-    { {    0.0f, 173.205081f } },
-    { { -100.0f,   0.0f      } },
-    { {  100.0f,   0.0f      } },
+  static const float triangle_vertices[] = {
+    // Position
+       0.0f, 173.205081f,
+    -100.0f,   0.0f,
+     100.0f,   0.0f,
+    
+    // Light intensity
+    1.0f,
+    0.5f,
+    0.0f,
   };
+  void* triangle_mesh_buffer = malloc(sizeof(triangle_vertices));
+  memcpy(triangle_mesh_buffer, triangle_vertices, sizeof(triangle_vertices));
 
-  static const vkm_vec2 square_vertices[] = {
-    { { -100.0f,  100.0f } },
-    { { -100.0f, -100.0f } },
-    { {  100.0f, -100.0f } },
-    { { -100.0f,  100.0f } },
-    { {  100.0f, -100.0f } },
-    { {  100.0f,  100.0f } },
+  static const float square_vertices[] = {
+    // Position
+    -100.0f,  100.0f,
+    -100.0f, -100.0f,
+     100.0f, -100.0f,
+    -100.0f,  100.0f,
+     100.0f, -100.0f,
+     100.0f,  100.0f,
+
+    // Light intensity
+    1.0f,
+    0.8f,
+    0.6f,
+    0.4f,
+    0.2f,
+    0.0f,
   };
+  void* square_mesh_buffer = malloc(sizeof(square_vertices));
+  memcpy(square_mesh_buffer, square_vertices, sizeof(square_vertices));
   
   const ecs_entity_t triangle_mesh = ecs_entity(world, {
     .set = ecs_values(
       {
         .type = ecs_id(MeshData),
         .ptr = &(MeshData) {
-          .vertices = triangle_vertices,
-          .vertices_count = GLI_COUNTOF(triangle_vertices),
+          .data = triangle_mesh_buffer,
+          .vertices_count = 3,
+          .vertex_attributes = {
+            { .type = GLI_VEC2 },
+            { .type = GLI_FLOAT },
+          },
         },
       }
     ),
@@ -95,8 +118,12 @@ int main(const int argc, char** argv) {
       {
         .type = ecs_id(MeshData),
         .ptr = &(MeshData) {
-          .vertices = square_vertices,
-          .vertices_count = GLI_COUNTOF(square_vertices),
+          .data = square_mesh_buffer,
+          .vertices_count = 6,
+          .vertex_attributes = {
+            { .type = GLI_VEC2 },
+            { .type = GLI_FLOAT },
+          },
         },
       }
     ),
@@ -104,12 +131,18 @@ int main(const int argc, char** argv) {
 
   static const char* vertex_shader_source =
     "layout(location = 0) in vec2 position;\n"
+    "layout(location = 1) in float light;\n"
+    "\n"
+    "out float light_intensity;\n"
     "\n"
     "void main() {\n"
+    "  light_intensity = light;\n"
     "  gl_Position = view_projection_matrix * model_matrix * vec4(position, 0.0, 1.0);\n"
     "}\n";
 
   static const char* fragment_shader_source =
+    "in float light_intensity;\n"
+    "\n"
     "out vec4 fragment_color;\n"
     "\n"
     "uniform vec4 entityColor;\n"
@@ -119,7 +152,12 @@ int main(const int argc, char** argv) {
     "uniform int unused;\n"
     "\n"
     "void main() {\n"
-    "  fragment_color = entityColor * Tint * (sin(time * entityTimeScale) * 0.5 + 0.5) * does_not_exist;\n"
+    "  fragment_color =\n"
+    "    entityColor\n"
+    "    * light_intensity\n"
+    "    * Tint\n"
+    "    * (sin(time * entityTimeScale) * 0.5 + 0.5)\n"
+    "    * does_not_exist;\n"
     "}\n";
 
   const ecs_entity_t shader_program = ecs_entity(world, {
@@ -128,8 +166,8 @@ int main(const int argc, char** argv) {
       {
         .type = ecs_id(ShaderProgramSource),
         .ptr = &(ShaderProgramSource) {
-          .vertex_shader = vertex_shader_source,
-          .fragment_shader = fragment_shader_source,
+          .vertex_shader = strdup(vertex_shader_source),
+          .fragment_shader = strdup(fragment_shader_source),
         },
       },
       {

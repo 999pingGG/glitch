@@ -55,6 +55,7 @@ typedef intptr_t GLintptr;
 #include <GL/gl.h>
 
 #define GLI_COUNTOF(array) (sizeof(array) / sizeof(array[0]))
+#define GLI_MAX_ATTRIBUTES 16
 #define GLI_MAX_UNIFORMS 20
 
 typedef enum gli_data_type_t {
@@ -64,48 +65,43 @@ typedef enum gli_data_type_t {
   GLI_USHORT,
   GLI_INT,
   GLI_UINT,
-  GLI_LONG,
-  GLI_ULONG,
   GLI_FLOAT,
-  GLI_DOUBLE,
   GLI_BVEC2,
   GLI_UBVEC2,
   GLI_SVEC2,
   GLI_USVEC2,
   GLI_IVEC2,
   GLI_UVEC2,
-  GLI_LVEC2,
-  GLI_ULVEC2,
   GLI_VEC2,
-  GLI_DVEC2,
   GLI_BVEC3,
   GLI_UBVEC3,
   GLI_SVEC3,
   GLI_USVEC3,
   GLI_IVEC3,
   GLI_UVEC3,
-  GLI_LVEC3,
-  GLI_ULVEC3,
   GLI_VEC3,
-  GLI_DVEC3,
   GLI_BVEC4,
   GLI_UBVEC4,
   GLI_SVEC4,
   GLI_USVEC4,
   GLI_IVEC4,
   GLI_UVEC4,
-  GLI_LVEC4,
-  GLI_ULVEC4,
   GLI_VEC4,
-  GLI_DVEC4,
   GLI_MAT4,
   GLI_DATA_TYPE_MAX,
 } gli_data_type_t;
 
 typedef struct MeshData {
-  // Currently, only a single vec2 vertex attribute is supported.
-  const vkm_vec2* vertices;
+  // This memory is owned by this component.
+  void* data;
   int vertices_count;
+  // Zero-terminated array, with count up to GLI_MAX_ATTRIBUTES.
+  struct attribute {
+    // The type is actually gli_data_type_t
+    int8_t type;
+    bool convert_to_float;
+    bool is_normalized;
+  } vertex_attributes[GLI_MAX_ATTRIBUTES];
 } MeshData;
 
 typedef struct Mesh {
@@ -114,7 +110,8 @@ typedef struct Mesh {
 } Mesh;
 
 typedef struct ShaderProgramSource {
-  const char* vertex_shader, *fragment_shader;
+  // Those buffers are owned by this component.
+  char* vertex_shader, *fragment_shader;
 } ShaderProgramSource;
 
 typedef struct gli_shader_input_data {
