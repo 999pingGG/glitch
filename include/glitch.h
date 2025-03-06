@@ -34,6 +34,7 @@ typedef intptr_t GLintptr;
 #define GL_LINK_STATUS 0x8B82
 #define GL_COMPILE_STATUS 0x8B81
 #define GL_ARRAY_BUFFER 0x8892
+#define GL_ELEMENT_ARRAY_BUFFER 0x8893
 #define GL_ACTIVE_UNIFORM_MAX_LENGTH 0x8B87
 #define GL_ACTIVE_UNIFORMS 0x8B86
 #define GL_ACTIVE_ATTRIBUTE_MAX_LENGTH 0x8B8A
@@ -56,7 +57,7 @@ typedef intptr_t GLintptr;
 
 #define GLI_COUNTOF(array) (sizeof(array) / sizeof(array[0]))
 #define GLI_MAX_ATTRIBUTES 16
-#define GLI_MAX_UNIFORMS 20
+#define GLI_MAX_UNIFORMS 25
 
 typedef enum gli_data_type_t {
   GLI_BYTE = 1,
@@ -94,7 +95,8 @@ typedef enum gli_data_type_t {
 typedef struct MeshData {
   // This memory is owned by this component.
   void* data;
-  int vertices_count;
+  unsigned* indices;
+  int vertices_count, indices_count;
   // Zero-terminated array, with count up to GLI_MAX_ATTRIBUTES.
   struct attribute {
     // The type is actually gli_data_type_t
@@ -105,8 +107,8 @@ typedef struct MeshData {
 } MeshData;
 
 typedef struct Mesh {
-  GLuint vertex_buffer_object, vertex_array_object;
-  int vertices_count;
+  GLuint vertex_buffer, index_buffer, vertex_array;
+  int vertices_count, indices_count;
 } Mesh;
 
 typedef struct ShaderProgramSource {
@@ -131,13 +133,13 @@ typedef struct ShaderProgram {
 
 typedef struct Camera2D {
   Position2D position;
-  vkm_mat4 view_projection_matrix;
+  vkm_mat4 view, projection;
   float zoom;
 } Camera2D;
 
 typedef struct Camera3D {
   Position3D position;
-  vkm_mat4 view_projection_matrix;
+  vkm_mat4 view, projection;
   float field_of_view, near_plane, far_plane;
 } Camera3D;
 

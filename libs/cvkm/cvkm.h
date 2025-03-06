@@ -31,19 +31,21 @@
 #endif
 #endif
 
-#define CVKM_E (2.71828182845904523536)         // e
-#define CVKM_LOG2E (1.44269504088896340736)     // log2(e)
-#define CVKM_LOG10E (0.434294481903251827651)   // log10(e)
-#define CVKM_LN2 (0.693147180559945309417)      // ln(2)
-#define CVKM_LN10 (2.30258509299404568402)      // ln(10)
-#define CVKM_PI (3.14159265358979323846)        // pi
-#define CVKM_PI_2 (1.57079632679489661923)      // pi/2
-#define CVKM_PI_4 (0.785398163397448309616)     // pi/4
-#define CVKM_1_PI (0.318309886183790671538)     // 1/pi
-#define CVKM_2_PI (0.636619772367581343076)     // 2/pi
-#define CVKM_2_SQRTPI (1.1283791670955125739)   // 2/sqrt(pi)
-#define CVKM_SQRT2 (1.4142135623730950488)      // sqrt(2)
-#define CVKM_SQRT1_2 (0.707106781186547524401)  // 1/sqrt(2)
+#define CVKM_E 2.71828182845904523536         // e
+#define CVKM_LOG2E 1.44269504088896340736     // log2(e)
+#define CVKM_LOG10E 0.434294481903251827651   // log10(e)
+#define CVKM_LN2 0.693147180559945309417      // ln(2)
+#define CVKM_LN10 2.30258509299404568402      // ln(10)
+#define CVKM_PI 3.14159265358979323846        // pi
+#define CVKM_PI_2 1.57079632679489661923      // pi/2
+#define CVKM_PI_4 0.785398163397448309616     // pi/4
+#define CVKM_1_PI 0.318309886183790671538     // 1/pi
+#define CVKM_2_PI 0.636619772367581343076     // 2/pi
+#define CVKM_2_SQRTPI 1.1283791670955125739   // 2/sqrt(pi)
+#define CVKM_SQRT2 1.4142135623730950488      // sqrt(2)
+#define CVKM_SQRT1_2 0.707106781186547524401  // 1/sqrt(2)
+#define CVKM_DEG_2_RAD 0.01745329251994329576
+#define CVKM_RAD_2_DEG 57.29577951308232087679
 
 #define CVKM_E_F ((float)CVKM_E)
 #define CVKM_LOG2E_F ((float)CVKM_LOG2E)
@@ -58,6 +60,8 @@
 #define CVKM_2_SQRTPI_F ((float)CVKM_2_SQRTPI)
 #define CVKM_SQRT2_F ((float)CVKM_SQRT2)
 #define CVKM_SQRT1_2_F ((float)CVKM_SQRT1_2)
+#define CVKM_DEG_2_RAD_F ((float)CVKM_DEG_2_RAD)
+#define CVKM_RAD_2_DEG_F ((float)CVKM_RAD_2_DEG)
 
 #ifdef __clang__
 // This is left ignored because in some macros using _Generic we list both const and non-const types. Some compilers
@@ -326,8 +330,14 @@ CVKM_DEFINE_VEC4(ul, uint64_t);
 CVKM_DEFINE_VEC4(, float);
 CVKM_DEFINE_VEC4(d, double);
 
-typedef vkm_vec4 vkm_versor;
-typedef vkm_vec4 vkm_quat;
+typedef union vkm_quat {
+  struct {
+    float x, y, z, w;
+  };
+  float raw[4];
+} vkm_quat;
+
+typedef vkm_quat vkm_versor;
 
 #define CVKM_QUAT_IDENTITY ((vkm_quat){ { 0.0f, 0.0f, 0.0f, 1.0f } })
 
@@ -522,6 +532,16 @@ CVKM_VEC4_ALL_OPERATIONS(ulvec4, uint64_t)
 CVKM_VEC4_ALL_OPERATIONS(vec4, float)
 CVKM_VEC4_ALL_OPERATIONS(dvec4, double)
 
+static void vkm_quat_mul(const vkm_quat* p, const vkm_quat* q, vkm_quat* result) {
+  const vkm_quat p_copy = *p;
+  const vkm_quat q_copy = *q;
+
+  result->x = p_copy.w * q_copy.x + p_copy.x * q_copy.w + p_copy.y * q_copy.z - p_copy.z * q_copy.y;
+  result->y = p_copy.w * q_copy.y - p_copy.x * q_copy.z + p_copy.y * q_copy.w + p_copy.z * q_copy.x;
+  result->z = p_copy.w * q_copy.z + p_copy.x * q_copy.y - p_copy.y * q_copy.x + p_copy.z * q_copy.w;
+  result->w = p_copy.w * q_copy.w - p_copy.x * q_copy.x - p_copy.y * q_copy.y - p_copy.z * q_copy.z;
+}
+
 #define vkm_add(a, b, result) _Generic((result),\
   vkm_bvec2*: vkm_bvec2_add,\
   vkm_ubvec2*: vkm_ubvec2_add,\
@@ -625,10 +645,8 @@ CVKM_VEC4_ALL_OPERATIONS(dvec4, double)
   CVKM_MUL_DIV_OPERATIONS(ulvec4, uint64_t, mul, b),\
   CVKM_MUL_DIV_OPERATIONS(vec4, float, mul, b),\
   CVKM_MUL_DIV_OPERATIONS(dvec4, double, mul, b),\
-  vkm_mat4*: _Generic((b),\
-    vkm_mat4*: vkm_mat4_mul,\
-    default: ((void)0)\
-  )\
+  vkm_mat4*: vkm_mat4_mul,\
+  vkm_quat*: vkm_quat_mul\
 )((a), (b), (result))
 
 #define vkm_div(a, b, result) _Generic((result),\
@@ -707,6 +725,13 @@ CVKM_VEC4_ALL_OPERATIONS(dvec4, double)
   return (type)operation((double)x);\
 }
 
+#define CVKM_TWO_SCALAR_OPERATION(operation, type, suffix) static type vkm_##operation##suffix(\
+  const type a,\
+  const type b\
+) {\
+  return (type)operation((double)a, (double)b);\
+}
+
 CVKM_SCALAR_OPERATION(sin, int8_t, b)
 CVKM_SCALAR_OPERATION(sin, uint8_t, ub)
 CVKM_SCALAR_OPERATION(sin, int16_t, s)
@@ -733,6 +758,42 @@ CVKM_SCALAR_OPERATION(tan, int32_t, i)
 CVKM_SCALAR_OPERATION(tan, uint32_t, ui)
 CVKM_SCALAR_OPERATION(tan, int64_t, l)
 CVKM_SCALAR_OPERATION(tan, uint64_t, ul)
+
+CVKM_SCALAR_OPERATION(asin, int8_t, b)
+CVKM_SCALAR_OPERATION(asin, uint8_t, ub)
+CVKM_SCALAR_OPERATION(asin, int16_t, s)
+CVKM_SCALAR_OPERATION(asin, uint16_t, us)
+CVKM_SCALAR_OPERATION(asin, int32_t, i)
+CVKM_SCALAR_OPERATION(asin, uint32_t, ui)
+CVKM_SCALAR_OPERATION(asin, int64_t, l)
+CVKM_SCALAR_OPERATION(asin, uint64_t, ul)
+
+CVKM_SCALAR_OPERATION(acos, int8_t, b)
+CVKM_SCALAR_OPERATION(acos, uint8_t, ub)
+CVKM_SCALAR_OPERATION(acos, int16_t, s)
+CVKM_SCALAR_OPERATION(acos, uint16_t, us)
+CVKM_SCALAR_OPERATION(acos, int32_t, i)
+CVKM_SCALAR_OPERATION(acos, uint32_t, ui)
+CVKM_SCALAR_OPERATION(acos, int64_t, l)
+CVKM_SCALAR_OPERATION(acos, uint64_t, ul)
+
+CVKM_SCALAR_OPERATION(atan, int8_t, b)
+CVKM_SCALAR_OPERATION(atan, uint8_t, ub)
+CVKM_SCALAR_OPERATION(atan, int16_t, s)
+CVKM_SCALAR_OPERATION(atan, uint16_t, us)
+CVKM_SCALAR_OPERATION(atan, int32_t, i)
+CVKM_SCALAR_OPERATION(atan, uint32_t, ui)
+CVKM_SCALAR_OPERATION(atan, int64_t, l)
+CVKM_SCALAR_OPERATION(atan, uint64_t, ul)
+
+CVKM_TWO_SCALAR_OPERATION(atan2, int8_t, b)
+CVKM_TWO_SCALAR_OPERATION(atan2, uint8_t, ub)
+CVKM_TWO_SCALAR_OPERATION(atan2, int16_t, s)
+CVKM_TWO_SCALAR_OPERATION(atan2, uint16_t, us)
+CVKM_TWO_SCALAR_OPERATION(atan2, int32_t, i)
+CVKM_TWO_SCALAR_OPERATION(atan2, uint32_t, ui)
+CVKM_TWO_SCALAR_OPERATION(atan2, int64_t, l)
+CVKM_TWO_SCALAR_OPERATION(atan2, uint64_t, ul)
 
 CVKM_SCALAR_OPERATION(sqrt, int8_t, b)
 CVKM_SCALAR_OPERATION(sqrt, uint8_t, ub)
@@ -811,6 +872,98 @@ CVKM_SCALAR_OPERATION(sqrt, uint64_t, ul)
   const float: tanf,\
   const double: tan\
 )(x)
+
+#define vkm_asin(x) _Generic((x),\
+  int8_t: vkm_asinb,\
+  uint8_t: vkm_asinub,\
+  int16_t: vkm_asins,\
+  uint16_t: vkm_asinus,\
+  int32_t: vkm_asini,\
+  uint32_t: vkm_asinui,\
+  int64_t: vkm_asinl,\
+  uint64_t: vkm_asinul,\
+  float: asinf,\
+  double: asin,\
+  const int8_t: vkm_asinb,\
+  const uint8_t: vkm_asinub,\
+  const int16_t: vkm_asins,\
+  const uint16_t: vkm_asinus,\
+  const int32_t: vkm_asini,\
+  const uint32_t: vkm_asinui,\
+  const int64_t: vkm_asinl,\
+  const uint64_t: vkm_asinul,\
+  const float: asinf,\
+  const double: asin\
+)(x)
+
+#define vkm_acos(x) _Generic((x),\
+  int8_t: vkm_acosb,\
+  uint8_t: vkm_acosub,\
+  int16_t: vkm_acoss,\
+  uint16_t: vkm_acosus,\
+  int32_t: vkm_acosi,\
+  uint32_t: vkm_acosui,\
+  int64_t: vkm_acosl,\
+  uint64_t: vkm_acosul,\
+  float: acosf,\
+  double: acos,\
+  const int8_t: vkm_acosb,\
+  const uint8_t: vkm_acosub,\
+  const int16_t: vkm_acoss,\
+  const uint16_t: vkm_acosus,\
+  const int32_t: vkm_acosi,\
+  const uint32_t: vkm_acosui,\
+  const int64_t: vkm_acosl,\
+  const uint64_t: vkm_acosul,\
+  const float: acosf,\
+  const double: acos\
+)(x)
+
+#define vkm_atan(x) _Generic((x),\
+  int8_t: vkm_atanb,\
+  uint8_t: vkm_atanub,\
+  int16_t: vkm_atans,\
+  uint16_t: vkm_atanus,\
+  int32_t: vkm_atani,\
+  uint32_t: vkm_atanui,\
+  int64_t: vkm_atanl,\
+  uint64_t: vkm_atanul,\
+  float: atanf,\
+  double: atan,\
+  const int8_t: vkm_atanb,\
+  const uint8_t: vkm_atanub,\
+  const int16_t: vkm_atans,\
+  const uint16_t: vkm_atanus,\
+  const int32_t: vkm_atani,\
+  const uint32_t: vkm_atanui,\
+  const int64_t: vkm_atanl,\
+  const uint64_t: vkm_atanul,\
+  const float: atanf,\
+  const double: atan\
+)(x)
+
+#define vkm_atan2(a, b) _Generic((a),\
+  int8_t: vkm_atan2b,\
+  uint8_t: vkm_atan2ub,\
+  int16_t: vkm_atan2s,\
+  uint16_t: vkm_atan2us,\
+  int32_t: vkm_atan2i,\
+  uint32_t: vkm_atan2ui,\
+  int64_t: vkm_atan2l,\
+  uint64_t: vkm_atan2ul,\
+  float: atan2f,\
+  double: atan2,\
+  const int8_t: vkm_atan2b,\
+  const uint8_t: vkm_atan2ub,\
+  const int16_t: vkm_atan2s,\
+  const uint16_t: vkm_atan2us,\
+  const int32_t: vkm_atan2i,\
+  const uint32_t: vkm_atan2ui,\
+  const int64_t: vkm_atan2l,\
+  const uint64_t: vkm_atan2ul,\
+  const float: atan2f,\
+  const double: atan2\
+)(a, b)
 
 #define vkm_sqrt(x) _Generic((x),\
   int8_t: vkm_sqrtb,\
@@ -1007,6 +1160,10 @@ CVKM_VEC4_MISC_OPERATIONS_FOR_INTS(lvec4, int64_t)
 CVKM_VEC4_MISC_OPERATIONS_FOR_UNSIGNED_INTS(ulvec4, uint64_t)
 CVKM_VEC4_MISC_OPERATIONS(vec4, float)
 CVKM_VEC4_MISC_OPERATIONS(dvec4, double)
+
+static float vkm_quat_magnitude(const vkm_quat* quaternion) {
+  return vkm_vec4_magnitude((const vkm_vec4*)quaternion);
+}
 
 #define vkm_dot(a, b) _Generic((a),\
   vkm_bvec2*: vkm_bvec2_dot,\
@@ -1207,7 +1364,9 @@ CVKM_VEC4_MISC_OPERATIONS(dvec4, double)
   vkm_vec4*: vkm_vec4_magnitude,\
   const vkm_vec4*: vkm_vec4_magnitude,\
   vkm_dvec4*: vkm_dvec4_magnitude,\
-  const vkm_dvec4*: vkm_dvec4_magnitude\
+  const vkm_dvec4*: vkm_dvec4_magnitude,\
+  vkm_quat*: vkm_quat_magnitude,\
+  const vkm_quat*: vkm_quat_magnitude\
 )(vec)
 
 #define vkm_normalize(vec, result) _Generic((result),\
@@ -1721,47 +1880,56 @@ static void vkm_mat4_mul(const vkm_mat4* a, const vkm_mat4* b, vkm_mat4* result)
 }
 
 static void vkm_mat4_mul_transform(const vkm_mat4* a, const vkm_mat4* b, vkm_mat4* result) {
-  result->m00 = a->m00 * b->m00 + a->m10 * b->m01 + a->m20 * b->m02;
-  result->m01 = a->m01 * b->m00 + a->m11 * b->m01 + a->m21 * b->m02;
-  result->m02 = a->m02 * b->m00 + a->m12 * b->m01 + a->m22 * b->m02;
-  result->m03 = a->m03 * b->m00 + a->m13 * b->m01 + a->m23 * b->m02;
+  const vkm_mat4 a_copy = *a;
+  const vkm_mat4 b_copy = *b;
 
-  result->m10 = a->m00 * b->m10 + a->m10 * b->m11 + a->m20 * b->m12;
-  result->m11 = a->m01 * b->m10 + a->m11 * b->m11 + a->m21 * b->m12;
-  result->m12 = a->m02 * b->m10 + a->m12 * b->m11 + a->m22 * b->m12;
-  result->m13 = a->m03 * b->m10 + a->m13 * b->m11 + a->m23 * b->m12;
+  result->m00 = a_copy.m00 * b_copy.m00 + a_copy.m10 * b_copy.m01 + a_copy.m20 * b_copy.m02;
+  result->m01 = a_copy.m01 * b_copy.m00 + a_copy.m11 * b_copy.m01 + a_copy.m21 * b_copy.m02;
+  result->m02 = a_copy.m02 * b_copy.m00 + a_copy.m12 * b_copy.m01 + a_copy.m22 * b_copy.m02;
+  result->m03 = a_copy.m03 * b_copy.m00 + a_copy.m13 * b_copy.m01 + a_copy.m23 * b_copy.m02;
 
-  result->m20 = a->m00 * b->m20 + a->m10 * b->m21 + a->m20 * b->m22;
-  result->m21 = a->m01 * b->m20 + a->m11 * b->m21 + a->m21 * b->m22;
-  result->m22 = a->m02 * b->m20 + a->m12 * b->m21 + a->m22 * b->m22;
-  result->m23 = a->m03 * b->m20 + a->m13 * b->m21 + a->m23 * b->m22;
+  result->m10 = a_copy.m00 * b_copy.m10 + a_copy.m10 * b_copy.m11 + a_copy.m20 * b_copy.m12;
+  result->m11 = a_copy.m01 * b_copy.m10 + a_copy.m11 * b_copy.m11 + a_copy.m21 * b_copy.m12;
+  result->m12 = a_copy.m02 * b_copy.m10 + a_copy.m12 * b_copy.m11 + a_copy.m22 * b_copy.m12;
+  result->m13 = a_copy.m03 * b_copy.m10 + a_copy.m13 * b_copy.m11 + a_copy.m23 * b_copy.m12;
 
-  result->m30 = a->m00 * b->m30 + a->m10 * b->m31 + a->m20 * b->m32 + a->m30 * b->m33;
-  result->m31 = a->m01 * b->m30 + a->m11 * b->m31 + a->m21 * b->m32 + a->m31 * b->m33;
-  result->m32 = a->m02 * b->m30 + a->m12 * b->m31 + a->m22 * b->m32 + a->m32 * b->m33;
-  result->m33 = a->m03 * b->m30 + a->m13 * b->m31 + a->m23 * b->m32 + a->m33 * b->m33;
+  result->m20 = a_copy.m00 * b_copy.m20 + a_copy.m10 * b_copy.m21 + a_copy.m20 * b_copy.m22;
+  result->m21 = a_copy.m01 * b_copy.m20 + a_copy.m11 * b_copy.m21 + a_copy.m21 * b_copy.m22;
+  result->m22 = a_copy.m02 * b_copy.m20 + a_copy.m12 * b_copy.m21 + a_copy.m22 * b_copy.m22;
+  result->m23 = a_copy.m03 * b_copy.m20 + a_copy.m13 * b_copy.m21 + a_copy.m23 * b_copy.m22;
+
+  result->m30 = a_copy.m00 * b_copy.m30 + a_copy.m10 * b_copy.m31 + a_copy.m20 * b_copy.m32 + a_copy.m30 * b_copy.m33;
+  result->m31 = a_copy.m01 * b_copy.m30 + a_copy.m11 * b_copy.m31 + a_copy.m21 * b_copy.m32 + a_copy.m31 * b_copy.m33;
+  result->m32 = a_copy.m02 * b_copy.m30 + a_copy.m12 * b_copy.m31 + a_copy.m22 * b_copy.m32 + a_copy.m32 * b_copy.m33;
+  result->m33 = a_copy.m03 * b_copy.m30 + a_copy.m13 * b_copy.m31 + a_copy.m23 * b_copy.m32 + a_copy.m33 * b_copy.m33;
 }
 
 static void vkm_mat4_mul_rotation(const vkm_mat4* a, const vkm_mat4* b, vkm_mat4* result) {
-  result->m00 = a->m00 * b->m00 + a->m10 * b->m01 + a->m20 * b->m02;
-  result->m01 = a->m01 * b->m00 + a->m11 * b->m01 + a->m21 * b->m02;
-  result->m02 = a->m02 * b->m00 + a->m12 * b->m01 + a->m22 * b->m02;
-  result->m03 = a->m03 * b->m00 + a->m13 * b->m01 + a->m23 * b->m02;
+  const vkm_mat4 a_copy = *a;
+  const float
+    b00 = b->m00, b01 = b->m01, b02 = b->m02,
+    b10 = b->m10, b11 = b->m11, b12 = b->m12,
+    b20 = b->m20, b21 = b->m21, b22 = b->m22;
 
-  result->m10 = a->m00 * b->m10 + a->m10 * b->m11 + a->m20 * b->m12;
-  result->m11 = a->m01 * b->m10 + a->m11 * b->m11 + a->m21 * b->m12;
-  result->m12 = a->m02 * b->m10 + a->m12 * b->m11 + a->m22 * b->m12;
-  result->m13 = a->m03 * b->m10 + a->m13 * b->m11 + a->m23 * b->m12;
+  result->m00 = a_copy.m00 * b00 + a_copy.m10 * b01 + a_copy.m20 * b02;
+  result->m01 = a_copy.m01 * b00 + a_copy.m11 * b01 + a_copy.m21 * b02;
+  result->m02 = a_copy.m02 * b00 + a_copy.m12 * b01 + a_copy.m22 * b02;
+  result->m03 = a_copy.m03 * b00 + a_copy.m13 * b01 + a_copy.m23 * b02;
 
-  result->m20 = a->m00 * b->m20 + a->m10 * b->m21 + a->m20 * b->m22;
-  result->m21 = a->m01 * b->m20 + a->m11 * b->m21 + a->m21 * b->m22;
-  result->m22 = a->m02 * b->m20 + a->m12 * b->m21 + a->m22 * b->m22;
-  result->m23 = a->m03 * b->m20 + a->m13 * b->m21 + a->m23 * b->m22;
+  result->m10 = a_copy.m00 * b10 + a_copy.m10 * b11 + a_copy.m20 * b12;
+  result->m11 = a_copy.m01 * b10 + a_copy.m11 * b11 + a_copy.m21 * b12;
+  result->m12 = a_copy.m02 * b10 + a_copy.m12 * b11 + a_copy.m22 * b12;
+  result->m13 = a_copy.m03 * b10 + a_copy.m13 * b11 + a_copy.m23 * b12;
 
-  result->m30 = a->m30;
-  result->m31 = a->m31;
-  result->m32 = a->m32;
-  result->m33 = a->m33;
+  result->m20 = a_copy.m00 * b20 + a_copy.m10 * b21 + a_copy.m20 * b22;
+  result->m21 = a_copy.m01 * b20 + a_copy.m11 * b21 + a_copy.m21 * b22;
+  result->m22 = a_copy.m02 * b20 + a_copy.m12 * b21 + a_copy.m22 * b22;
+  result->m23 = a_copy.m03 * b20 + a_copy.m13 * b21 + a_copy.m23 * b22;
+
+  result->m30 = a_copy.m30;
+  result->m31 = a_copy.m31;
+  result->m32 = a_copy.m32;
+  result->m33 = a_copy.m33;
 }
 
 static void vkm_make_rotation(const float angle, const vkm_vec3* axis, vkm_mat4* result) {
@@ -1818,7 +1986,7 @@ static void vkm_scale(vkm_mat4* matrix, const vkm_vec3* vector) {
 }
 
 static void vkm_quat_to_mat4(const vkm_versor* versor, vkm_mat4* result) {
-  float scale_factor = vkm_vec4_magnitude(versor);
+  float scale_factor = vkm_magnitude(versor);
   scale_factor = scale_factor > 0.0f ? 2.0f / scale_factor : 0.0f;
 
   const float xx = scale_factor * versor->x * versor->x;
@@ -1848,12 +2016,97 @@ static void vkm_quat_to_mat4(const vkm_versor* versor, vkm_mat4* result) {
   result->m03 = result->m13 = result->m23 = result->m30 = result->m31 = result->m32 = result->m33 = 1.0f;
 }
 
+static void vkm_mat4_to_euler(const vkm_mat4* matrix, vkm_vec3* result) {
+  if (matrix->m20 > -1.0f && matrix->m20 < 1.0f) {
+    // There's a single Euler representation, all good.
+    result->y = vkm_asin(matrix->m20);
+    result->x = vkm_atan2(-matrix->m21, matrix->m22);
+    result->z = vkm_atan2(-matrix->m10, matrix->m00);
+    return;
+  }
+
+  // Gimbal lock: m20 is either exactly 1 or -1, there's multiple correct answers!
+  result->y = CVKM_PI_2_F * matrix->m20;
+  result->x = vkm_atan2(matrix->m01, matrix->m11) * matrix->m20;
+  result->z = 0.0f; // Arbitrarily set to 0.
+}
+
+static void vkm_euler_to_mat4(const vkm_vec3* euler, vkm_mat4* result) {
+  const float x_sine = vkm_sin(euler->x);
+  const float x_cosine = vkm_cos(euler->x);
+  const float y_sine = vkm_sin(euler->y);
+  const float y_cosine = vkm_cos(euler->y);
+  const float z_sine = vkm_sin(euler->z);
+  const float z_cosine = vkm_cos(euler->z);
+
+  const float z_cosine_times_x_sine = z_cosine * x_sine;
+  const float x_cosine_times_z_cosine = x_cosine * z_cosine;
+  const float y_sine_times_z_sine = y_sine * z_sine;
+
+  // Set the rotation portion of the matrix.
+  result->m00 = y_cosine * z_cosine;
+  result->m01 = z_cosine_times_x_sine * y_sine + x_cosine * z_sine;
+  result->m02 = -x_cosine_times_z_cosine * y_sine + x_sine * z_sine;
+  result->m10 = -y_cosine * z_sine;
+  result->m11 = x_cosine_times_z_cosine - x_sine * y_sine_times_z_sine;
+  result->m12 = z_cosine_times_x_sine + x_cosine * y_sine_times_z_sine;
+  result->m20 = y_sine;
+  result->m21 = -y_cosine * x_sine;
+  result->m22 = x_cosine * y_cosine;
+
+  // Set the rest of the matrix to identity values.
+  result->columns[3] = (vkm_vec4){ { 0.0f, 0.0f, 0.0f, 1.0f } };
+  result->m30 = 0.0f;
+  result->m31 = 0.0f;
+  result->m32 = 0.0f;
+}
+
+static void vkm_euler_to_quat_lh(const vkm_vec3* euler, vkm_quat* result) {
+  const float x_sine = vkm_sin(euler->x * 0.5f);
+  const float x_cosine = vkm_cos(euler->x * 0.5f);
+  const float y_sine = vkm_sin(euler->y * 0.5f);
+  const float y_cosine = vkm_cos(euler->y * 0.5f);
+  const float z_sine = -vkm_sin(euler->z * 0.5f);
+  const float z_cosine = vkm_cos(euler->z * 0.5f);
+
+  *result = (vkm_quat){ {
+    x_cosine * y_sine * z_sine + x_sine * y_cosine * z_cosine,
+    x_cosine * y_sine * z_cosine - x_sine * y_cosine * z_sine,
+    x_cosine * y_cosine * z_sine + x_sine * y_sine * z_cosine,
+    x_cosine * y_cosine * z_cosine - x_sine * y_sine * z_sine,
+  } };
+}
+
+static void vkm_euler_to_quat_rh(const vkm_vec3* euler, vkm_quat* result) {
+  const float x_sine = vkm_sin(euler->x * 0.5f);
+  const float x_cosine = vkm_cos(euler->x * 0.5f);
+  const float y_sine = vkm_sin(euler->y * 0.5f);
+  const float y_cosine = vkm_cos(euler->y * 0.5f);
+  const float z_sine = vkm_sin(euler->z * 0.5f);
+  const float z_cosine = vkm_cos(euler->z * 0.5f);
+
+  *result = (vkm_quat){ {
+    x_cosine * y_sine * z_sine + x_sine * y_cosine * z_cosine,
+    x_cosine * y_sine * z_cosine - x_sine * y_cosine * z_sine,
+    x_cosine * y_cosine * z_sine + x_sine * y_sine * z_cosine,
+    x_cosine * y_cosine * z_cosine - x_sine * y_sine * z_sine,
+  } };
+}
+
+#ifdef CVKM_LH
+#define vkm_euler_to_quat vkm_euler_to_quat_lh
+#else
+#define vkm_euler_to_quat vkm_euler_to_quat_rh
+#endif
+
 typedef vkm_vec2 Position2D;
 typedef vkm_vec3 Position3D;
 typedef vkm_vec4 Position4D;
 typedef vkm_dvec2 DoublePosition2D;
 typedef vkm_dvec3 DoublePosition3D;
 typedef vkm_dvec4 DoublePosition4D;
+typedef float Rotation2D;
+typedef vkm_versor Rotation3D;
 typedef vkm_mat4 Transform;
 typedef vkm_vec2 Velocity2D;
 typedef vkm_vec3 Velocity3D;
@@ -1895,12 +2148,15 @@ extern ECS_COMPONENT_DECLARE(vkm_vec4);
 extern ECS_COMPONENT_DECLARE(vkm_dvec4);
 extern ECS_COMPONENT_DECLARE(vkm_mat4);
 extern ECS_COMPONENT_DECLARE(vkm_quat);
+extern ECS_COMPONENT_DECLARE(vkm_versor);
 extern ECS_COMPONENT_DECLARE(Position2D);
 extern ECS_COMPONENT_DECLARE(Position3D);
 extern ECS_COMPONENT_DECLARE(Position4D);
 extern ECS_COMPONENT_DECLARE(DoublePosition2D);
 extern ECS_COMPONENT_DECLARE(DoublePosition3D);
 extern ECS_COMPONENT_DECLARE(DoublePosition4D);
+extern ECS_COMPONENT_DECLARE(Rotation2D);
+extern ECS_COMPONENT_DECLARE(Rotation3D);
 extern ECS_COMPONENT_DECLARE(Transform);
 extern ECS_COMPONENT_DECLARE(Velocity2D);
 extern ECS_COMPONENT_DECLARE(Velocity3D);
@@ -1944,12 +2200,15 @@ ECS_COMPONENT_DECLARE(vkm_vec4);
 ECS_COMPONENT_DECLARE(vkm_dvec4);
 ECS_COMPONENT_DECLARE(vkm_mat4);
 ECS_COMPONENT_DECLARE(vkm_quat);
+ECS_COMPONENT_DECLARE(vkm_versor);
 ECS_COMPONENT_DECLARE(Position2D);
 ECS_COMPONENT_DECLARE(Position3D);
 ECS_COMPONENT_DECLARE(Position4D);
 ECS_COMPONENT_DECLARE(DoublePosition2D);
 ECS_COMPONENT_DECLARE(DoublePosition3D);
 ECS_COMPONENT_DECLARE(DoublePosition4D);
+ECS_COMPONENT_DECLARE(Rotation2D);
+ECS_COMPONENT_DECLARE(Rotation3D);
 ECS_COMPONENT_DECLARE(Transform);
 ECS_COMPONENT_DECLARE(Velocity2D);
 ECS_COMPONENT_DECLARE(Velocity3D);
@@ -1996,19 +2255,34 @@ CVKM_SPAWN_ZERO_CTOR(vkm_lvec4)
 CVKM_SPAWN_ZERO_CTOR(vkm_ulvec4)
 CVKM_SPAWN_ZERO_CTOR(vkm_vec4)
 CVKM_SPAWN_ZERO_CTOR(vkm_dvec4)
-CVKM_SPAWN_ZERO_CTOR(vkm_mat4)
-CVKM_SPAWN_ZERO_CTOR(vkm_quat)
 CVKM_SPAWN_ZERO_CTOR(Position2D)
 CVKM_SPAWN_ZERO_CTOR(Position3D)
 CVKM_SPAWN_ZERO_CTOR(Position4D)
 CVKM_SPAWN_ZERO_CTOR(DoublePosition2D)
 CVKM_SPAWN_ZERO_CTOR(DoublePosition3D)
 CVKM_SPAWN_ZERO_CTOR(DoublePosition4D)
+CVKM_SPAWN_ZERO_CTOR(Rotation2D)
 CVKM_SPAWN_ZERO_CTOR(Velocity2D)
 CVKM_SPAWN_ZERO_CTOR(Velocity3D)
 CVKM_SPAWN_ZERO_CTOR(Velocity4D)
 CVKM_SPAWN_ONE_CTOR(Mass)
 CVKM_SPAWN_ONE_CTOR(GravityScale)
+
+ECS_CTOR(vkm_mat4, ptr, {
+  *ptr = CVKM_MAT4_IDENTITY;
+})
+
+ECS_CTOR(vkm_quat, ptr, {
+  *ptr = CVKM_QUAT_IDENTITY;
+})
+
+ECS_CTOR(vkm_versor, ptr, {
+  *ptr = CVKM_QUAT_IDENTITY;
+})
+
+ECS_CTOR(Rotation3D, ptr, {
+  *ptr = CVKM_QUAT_IDENTITY;
+})
 
 ECS_CTOR(Transform, ptr, {
   *ptr = CVKM_MAT4_IDENTITY;
@@ -2135,12 +2409,18 @@ void cvkmImport(ecs_world_t* world) {
   CVKM_VEC4_COMPONENT(dvec4, vkm_dvec4, ecs_f64_t, 0);
   CVKM_MAT4_COMPONENT(mat4, vkm_mat4, ecs_f32_t);
   CVKM_VEC4_COMPONENT(quat, vkm_quat, ecs_f32_t, 0);
+  ECS_COMPONENT_DEFINE(world, vkm_versor);
+  ecs_add_pair(world, ecs_id(vkm_versor), EcsIsA, ecs_id(vkm_quat));
   CVKM_VEC2_COMPONENT(Position2D, Position2D, ecs_f32_t, EcsMeters);
   CVKM_VEC3_COMPONENT(Position3D, Position3D, ecs_f32_t, EcsMeters);
   CVKM_VEC3_COMPONENT(Position4D, Position4D, ecs_f32_t, EcsMeters);
   CVKM_VEC2_COMPONENT(DoublePosition2D, DoublePosition2D, ecs_f64_t, EcsMeters);
   CVKM_VEC3_COMPONENT(DoublePosition3D, DoublePosition3D, ecs_f64_t, EcsMeters);
   CVKM_VEC3_COMPONENT(DoublePosition4D, DoublePosition4D, ecs_f64_t, EcsMeters);
+  ECS_COMPONENT_DEFINE(world, Rotation2D);
+  ecs_add_pair(world, ecs_id(Rotation2D), EcsIsA, EcsRadians);
+  ECS_COMPONENT_DEFINE(world, Rotation3D);
+  ecs_add_pair(world, ecs_id(Rotation3D), EcsIsA, ecs_id(vkm_versor));
   CVKM_MAT4_COMPONENT(Transform, Transform, ecs_f32_t);
   CVKM_VEC2_COMPONENT(Velocity2D, Velocity2D, ecs_f32_t, EcsMetersPerSecond);
   CVKM_VEC2_COMPONENT(Velocity3D, Velocity3D, ecs_f32_t, EcsMetersPerSecond);
@@ -2184,12 +2464,15 @@ void cvkmImport(ecs_world_t* world) {
   ecs_set_hooks(world, vkm_dvec4, { .ctor = ecs_ctor(vkm_dvec4) });
   ecs_set_hooks(world, vkm_mat4, { .ctor = ecs_ctor(vkm_mat4) });
   ecs_set_hooks(world, vkm_quat, { .ctor = ecs_ctor(vkm_quat) });
+  ecs_set_hooks(world, vkm_versor, { .ctor = ecs_ctor(vkm_versor) });
   ecs_set_hooks(world, Position2D, { .ctor = ecs_ctor(Position2D) });
   ecs_set_hooks(world, Position3D, { .ctor = ecs_ctor(Position3D) });
   ecs_set_hooks(world, Position4D, { .ctor = ecs_ctor(Position4D) });
   ecs_set_hooks(world, DoublePosition2D, { .ctor = ecs_ctor(DoublePosition2D) });
   ecs_set_hooks(world, DoublePosition3D, { .ctor = ecs_ctor(DoublePosition3D) });
   ecs_set_hooks(world, DoublePosition4D, { .ctor = ecs_ctor(DoublePosition4D) });
+  ecs_set_hooks(world, Rotation2D, { .ctor = ecs_ctor(Rotation2D) });
+  ecs_set_hooks(world, Rotation3D, { .ctor = ecs_ctor(Rotation3D) });
   ecs_set_hooks(world, Transform, { .ctor = ecs_ctor(Transform) });
   ecs_set_hooks(world, Velocity2D, { .ctor = ecs_ctor(Velocity2D) });
   ecs_set_hooks(world, Velocity3D, { .ctor = ecs_ctor(Velocity3D) });
