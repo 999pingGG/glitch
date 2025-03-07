@@ -20,17 +20,17 @@ if(MATH_LIBRARY)
 endif()
 
 # Because we don't control those.
-set(CVKM_DISABLE_WARNINGS_LIST
+set(DISABLE_WARNINGS_LIST
   libs/flecs/flecs.c
   libs/flecs/flecs.h
 )
 
 if(MSVC)
   target_compile_options(tests PRIVATE /W4 /WX)
-  set_source_files_properties(${CVKM_DISABLE_WARNINGS_LIST} PROPERTIES COMPILE_FLAGS /W0)
+  set_source_files_properties(${DISABLE_WARNINGS_LIST} PROPERTIES COMPILE_FLAGS /W0)
 else()
   target_compile_options(tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
-  set_source_files_properties(${CVKM_DISABLE_WARNINGS_LIST} PROPERTIES COMPILE_FLAGS -w)
+  set_source_files_properties(${DISABLE_WARNINGS_LIST} PROPERTIES COMPILE_FLAGS -w)
   target_compile_definitions(tests PRIVATE MUNIT_NO_FORK)
 endif()
 
