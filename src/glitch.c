@@ -45,17 +45,6 @@ typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC)(
 static HGLRC context;
 static HWND window_handle;
 static HDC device_context_handle;
-
-static LRESULT CALLBACK window_proc(HWND handle, UINT message, WPARAM w_param, LPARAM l_param) {
-  switch (message) {
-    case WM_CLOSE:
-    case WM_DESTROY:
-      PostQuitMessage(0);
-      return 0;
-    default:
-      return DefWindowProc(handle, message, w_param, l_param);
-  }
-}
 #else
 #error Unsupported platform.
 #endif
@@ -1006,6 +995,27 @@ static void fini(ecs_world_t* world, void* unused) {
 #endif
 #endif
 
+#ifdef GLI_WINDOWS
+static LRESULT CALLBACK window_proc(
+  const HWND handle,
+  const UINT message,
+  const WPARAM word_param,
+  const LPARAM long_param
+) {
+  switch (message) {
+    case WM_CLOSE:
+    case WM_DESTROY:
+      PostQuitMessage(0);
+      return 0;
+    case WM_SIZE:
+      glViewport(0, 0, width = LOWORD(long_param), height = HIWORD(long_param));
+      return 0;
+    default:
+      return DefWindowProc(handle, message, word_param, long_param);
+  }
+}
+#endif
+
 void glitchImport(ecs_world_t* world) {
   ECS_MODULE(world, glitch);
 
@@ -1241,8 +1251,8 @@ void glitchImport(ecs_world_t* world) {
     WS_OVERLAPPEDWINDOW | WS_VISIBLE,
     CW_USEDEFAULT,
     CW_USEDEFAULT,
-    GLI_WIDTH,
-    GLI_HEIGHT,
+    GLI_INITIAL_WIDTH,
+    GLI_INITIAL_HEIGHT,
     NULL,
     NULL,
     GetModuleHandle(NULL),
