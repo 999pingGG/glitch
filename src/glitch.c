@@ -60,9 +60,12 @@ static LRESULT CALLBACK window_proc(HWND handle, UINT message, WPARAM w_param, L
 #error Unsupported platform.
 #endif
 
-// Hardcoded for now.
-#define GLI_WIDTH 800
-#define GLI_HEIGHT 600
+#define GLI_INITIAL_WIDTH 800
+#define GLI_INITIAL_HEIGHT 600
+
+// TODO: Move this into an ECS component.
+static int width = GLI_INITIAL_WIDTH;
+static int height = GLI_INITIAL_HEIGHT;
 
 // The number of terms that we use in the ecs_query_desc_t::terms of the shader program.
 #define GLI_RESERVED_TERMS 7
@@ -719,8 +722,8 @@ static void PreRenderFrame(ecs_iter_t* it) {
   if (camera_2d) {
     // Compute 2D projection matrix.
     const float zoom_factor = 1.0f / camera_2d->zoom;
-    const float half_width = GLI_WIDTH * 0.5f * zoom_factor;
-    const float half_height = GLI_HEIGHT * 0.5f * zoom_factor;
+    const float half_width = (float)width * 0.5f * zoom_factor;
+    const float half_height = (float)height * 0.5f * zoom_factor;
     vkm_orthogonal(
       -half_width,
       half_width,
@@ -742,7 +745,7 @@ static void PreRenderFrame(ecs_iter_t* it) {
     // Compute 3D projection matrix.
     vkm_perspective(
       camera_3d->field_of_view * CVKM_DEG_2_RAD_F,
-      (float)GLI_WIDTH / GLI_HEIGHT,
+      (float)width / (float)height,
       camera_3d->near_plane,
       camera_3d->far_plane,
       &camera_3d->projection
@@ -760,6 +763,9 @@ static void PreRenderFrame(ecs_iter_t* it) {
     XEvent event;
     XNextEvent(display, &event);
     switch (event.type) {
+      case ConfigureNotify:
+        glViewport(0, 0, width = event.xconfigure.width, height = event.xconfigure.height);
+        break;
       case ClientMessage:
         if ((Atom)event.xclient.data.l[0] == wm_delete) {
           ecs_quit(it->world);
@@ -805,7 +811,7 @@ static void Render(ecs_iter_t* it) {
   warned = false;
 
   built_ins_t built_ins = {
-    .resolution = { { GLI_WIDTH, GLI_HEIGHT } },
+    .resolution = { { (float)width, (float)height } },
     .time = (float)ecs_get_world_info(it->world)->world_time_total,
     .delta_time = it->delta_time,
   };
@@ -1146,20 +1152,22 @@ void glitchImport(ecs_world_t* world) {
     return;
   }
 
+  const Window root_window = RootWindow(display, visual_info->screen);
+
   // Create a colormap and set window attributes.
   XSetWindowAttributes set_window_attributes = {
     .background_pixmap = None,
     .event_mask = StructureNotifyMask | ExposureMask | KeyPressMask,
-    .colormap = XCreateColormap(display, RootWindow(display, visual_info->screen), visual_info->visual, AllocNone),
+    .colormap = XCreateColormap(display, root_window, visual_info->visual, AllocNone),
   };
 
   window = XCreateWindow(
     display,
-    RootWindow(display, visual_info->screen),
+    root_window,
     0,
     0,
-    GLI_WIDTH,
-    GLI_HEIGHT,
+    GLI_INITIAL_WIDTH,
+    GLI_INITIAL_HEIGHT,
     0,
     visual_info->depth,
     InputOutput,
