@@ -1,8 +1,8 @@
+#include <stdlib.h>
+
 #define CVKM_NO
 #define CVKM_ENABLE_FLECS
 #define CVKM_FLECS_IMPLEMENTATION
-#include <stdlib.h>
-
 #include <cvkm.h>
 #include <flecs.h>
 #include <glitch.h>
@@ -40,7 +40,7 @@ static void Move(ecs_iter_t* it) {
   const Lifetime* lifetimes = ecs_field(it, Lifetime, 1);
 
   for (int i = 0; i < it->count; i++) {
-    positions[i] = (Position2D){ { vkm_cos(lifetimes[i]) * 100.0f, vkm_sin(lifetimes[i]) * 100.0f } };
+    positions[i] = (Position2D){ { vkm_cos(lifetimes[i]) * 300.0f, vkm_sin(lifetimes[i]) * 300.0f } };
   }
 }
 
@@ -64,7 +64,11 @@ static void Rotate(ecs_iter_t* it) {
       
       const float factor = time_scales ? time_scales[i] : 1.0f;
       vkm_quat delta = CVKM_QUAT_IDENTITY;
-      vkm_euler_to_quat(&(vkm_vec3) { { 0.0f, factor * it->delta_time, 0.0f } }, &delta);
+      vkm_euler_to_quat(&(vkm_vec3) { {
+        factor * it->delta_time * 0.6f,
+        factor * it->delta_time,
+        factor * it->delta_time * 0.3f,
+      } }, &delta);
 
       vkm_mul(rotation, &delta, rotation);
     }
@@ -88,9 +92,11 @@ int main(const int argc, char** argv) {
   ecs_add_pair(world, ecs_id(Tint), EcsIsA, ecs_id(vkm_vec4));
   ecs_set_hooks(world, Tint, { .ctor = ecs_ctor(Tint) });
 
+  ECS_TAG(world, Rotating);
+
   ECS_SYSTEM(world, Age, EcsOnUpdate, [inout] Lifetime, [in] TimeScale);
   ECS_SYSTEM(world, Move, EcsOnUpdate, [out] cvkm.Position2D, [in] Lifetime);
-  ECS_SYSTEM(world, Rotate, EcsOnUpdate, [inout] cvkm.Rotation2D || cvkm.Rotation3D, [in] ?TimeScale);
+  ECS_SYSTEM(world, Rotate, EcsOnUpdate, [inout] cvkm.Rotation2D || cvkm.Rotation3D, [in] ?TimeScale, [none] Rotating);
 
   // Equilateral triangle
   static const float triangle_vertices[] = {
@@ -235,6 +241,7 @@ int main(const int argc, char** argv) {
         .ptr = &(MeshData) {
           .data = triangle_mesh_buffer,
           .vertices_count = 3,
+          .primitive = GLI_TRIANGLES,
           .vertex_attributes = {
             { .type = GLI_VEC2 },
             { .type = GLI_FLOAT },
@@ -251,6 +258,7 @@ int main(const int argc, char** argv) {
         .ptr = &(MeshData) {
           .data = square_mesh_buffer,
           .vertices_count = 6,
+          .primitive = GLI_TRIANGLES,
           .vertex_attributes = {
             { .type = GLI_VEC2 },
             { .type = GLI_FLOAT },
@@ -269,6 +277,7 @@ int main(const int argc, char** argv) {
           .indices = cube_indices_buffer,
           .vertices_count = 24,
           .indices_count = 36,
+          .primitive = GLI_TRIANGLES,
           .vertex_attributes = {
             { .type = GLI_VEC3 },
             { .type = GLI_VEC4 },
@@ -367,7 +376,8 @@ int main(const int argc, char** argv) {
       ecs_id(TimeScale),
       ecs_id(Lifetime),
       ecs_pair(ecs_id(Uses), triangle_mesh),
-      ecs_pair(ecs_id(Uses), shader_program_2d)
+      ecs_pair(ecs_id(Uses), shader_program_2d),
+      ecs_id(Rotating)
     ),
     .set = ecs_values(
       { .type = ecs_id(Color), .ptr = &(Color) { { 1.0f, 0.0f, 0.0f, 1.0f } } }
@@ -381,7 +391,8 @@ int main(const int argc, char** argv) {
       ecs_id(Rotation2D),
       ecs_id(Lifetime),
       ecs_pair(ecs_id(Uses), square_mesh),
-      ecs_pair(ecs_id(Uses), shader_program_2d)
+      ecs_pair(ecs_id(Uses), shader_program_2d),
+      ecs_id(Rotating)
     ),
     .set = ecs_values(
       { .type = ecs_id(TimeScale), .ptr = &(float){ 2.0f } },
@@ -394,7 +405,8 @@ int main(const int argc, char** argv) {
     .add = ecs_ids(
       ecs_id(Rotation3D),
       ecs_pair(ecs_id(Uses), cube_mesh),
-      ecs_pair(ecs_id(Uses), shader_program_3d)
+      ecs_pair(ecs_id(Uses), shader_program_3d),
+      ecs_id(Rotating)
     ),
     .set = ecs_values(
       { .type = ecs_id(Position3D), .ptr = &(Position3D) { { 0.0f, 0.0f, -3.0f } } }

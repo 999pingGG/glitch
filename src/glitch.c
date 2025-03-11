@@ -56,10 +56,12 @@ static HDC device_context_handle;
 static int width = GLI_INITIAL_WIDTH;
 static int height = GLI_INITIAL_HEIGHT;
 
+static GLuint attributeless_vertex_array;
+
 // The number of terms that we use in the ecs_query_desc_t::terms of the shader program.
-#define GLI_RESERVED_TERMS 7
+#define GLI_RESERVED_TERMS 9
 // This is less than the previous int because of EcsOr usage.
-#define GLI_SHADER_QUERY_TERMS 6
+#define GLI_SHADER_QUERY_TERMS 8
 
 static_assert(GLI_RESERVED_TERMS + GLI_MAX_UNIFORMS <= FLECS_TERM_COUNT_MAX, "You need to lower GLI_MAX_UNIFORMS!");
 
@@ -278,7 +280,6 @@ ECS_DTOR(ShaderProgram, ptr, {
 
 ECS_CTOR(Camera2D, ptr, {
   *ptr = (Camera2D){
-    .position = CVKM_VEC2_ZERO,
     .view = CVKM_MAT4_IDENTITY,
     .projection = CVKM_MAT4_IDENTITY,
     .zoom = 1.0f,
@@ -287,7 +288,6 @@ ECS_CTOR(Camera2D, ptr, {
 
 ECS_CTOR(Camera3D, ptr, {
   *ptr = (Camera3D){
-    .position = CVKM_VEC3_ZERO,
     .view = CVKM_MAT4_IDENTITY,
     .projection = CVKM_MAT4_IDENTITY,
     .field_of_view = 80.0f,
@@ -308,11 +308,12 @@ static GLuint compile_shader(const GLenum type, const char* source) {
   const GLuint shader = glCreateShader(type);
   static const char* shader_copypasta =
     "#version 330 core\n"
-    "layout(std140) uniform built_ins {"
-      "mat4 model, view, projection;"
-      "vec2 resolution;"
-      "float time, delta_time;"
-    "};";
+    "layout(std140) uniform built_ins {\n"
+    "  mat4 model, view, projection;\n"
+    "  vec2 resolution;\n"
+    "  float time, delta_time;\n"
+    "};\n"
+    "#line 1\n";
   const char* sources[2] = { shader_copypasta, source };
   glShaderSource(shader, 2, sources, NULL);
   glCompileShader(shader);
@@ -376,50 +377,55 @@ static void MakeMeshes(ecs_iter_t* it) {
 
     mesh->vertices_count = mesh_data->vertices_count;
     mesh->indices_count = mesh_data->indices_count;
+    mesh->primitive = mesh_data->primitive;
+    assert(mesh->primitive);
 
-    glGenVertexArrays(1, &mesh->vertex_array);
-    glBindVertexArray(mesh->vertex_array);
+    if (mesh_data->data) {
+      glGenVertexArrays(1, &mesh->vertex_array);
+      glBindVertexArray(mesh->vertex_array);
 
-    glGenBuffers(1, &mesh->vertex_buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, mesh->vertex_buffer);
+      glGenBuffers(1, &mesh->vertex_buffer);
+      glBindBuffer(GL_ARRAY_BUFFER, mesh->vertex_buffer);
 
-    ecs_modified(it->world, it->entities[i], Mesh);
+      // As we iterate the vertex attributes, the buffer size serves as an offset, too.
+      GLsizeiptr buffer_size = 0;
+      for (int j = 0; mesh_data->vertex_attributes[j].type && j < GLI_MAX_ATTRIBUTES; j++) {
+        const gli_type_info_t info = type_infos[mesh_data->vertex_attributes[j].type];
 
-    // As we iterate the vertex attributes, the buffer size serves as an offset, too.
-    GLsizeiptr buffer_size = 0;
-    for (int j = 0; mesh_data->vertex_attributes[j].type && j < GLI_MAX_ATTRIBUTES; j++) {
-      const gli_type_info_t info = type_infos[mesh_data->vertex_attributes[j].type];
+        if (info.type == GL_FLOAT || mesh_data->vertex_attributes[j].convert_to_float) {
+          glVertexAttribPointer(
+            j,
+            info.vector_components,
+            info.type,
+            mesh_data->vertex_attributes[j].is_normalized,
+            0,
+            (const GLvoid*)buffer_size
+          );
+        } else {
+          glVertexAttribIPointer(j, info.vector_components, info.type, 0, (const GLvoid*)buffer_size);
+        }
 
-      if (info.type == GL_FLOAT || mesh_data->vertex_attributes[j].convert_to_float) {
-        glVertexAttribPointer(
-          j,
-          info.vector_components,
-          info.type,
-          mesh_data->vertex_attributes[j].is_normalized,
-          0,
-          (const GLvoid*)buffer_size
-        );
-      } else {
-        glVertexAttribIPointer(j, info.vector_components, info.type, 0, (const GLvoid*)buffer_size);
+        glEnableVertexAttribArray(j);
+        buffer_size += info.size * mesh_data->vertices_count;
       }
 
-      glEnableVertexAttribArray(j);
-      buffer_size += info.size * mesh_data->vertices_count;
+      glBufferData(GL_ARRAY_BUFFER, buffer_size, mesh_data->data, GL_STATIC_DRAW);
+
+      if (mesh_data->indices) {
+        glGenBuffers(1, &mesh->index_buffer);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->index_buffer);
+        glBufferData(
+          GL_ELEMENT_ARRAY_BUFFER,
+          sizeof(*mesh_data->indices) * mesh_data->indices_count,
+          mesh_data->indices,
+          GL_STATIC_DRAW
+        );
+      }
+    } else {
+      mesh->vertex_array = attributeless_vertex_array;
     }
 
-    glBufferData(GL_ARRAY_BUFFER, buffer_size, mesh_data->data, GL_STATIC_DRAW);
-
-    if (mesh_data->indices) {
-      glGenBuffers(1, &mesh->index_buffer);
-      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->index_buffer);
-      glBufferData(
-        GL_ELEMENT_ARRAY_BUFFER,
-        sizeof(*mesh_data->indices) * mesh_data->indices_count,
-        mesh_data->indices,
-        GL_STATIC_DRAW
-      );
-    }
-
+    ecs_modified(it->world, it->entities[i], Mesh);
     ecs_remove(it->world, it->entities[i], MeshData);
   }
 }
@@ -550,6 +556,16 @@ static void CompileShaders(ecs_iter_t* it) {
           .oper = EcsOptional,
         },
         {
+          .id = ecs_id(Scale2D),
+          .inout = EcsIn,
+          .oper = EcsOptional,
+        },
+        {
+          .id = ecs_id(Scale3D),
+          .inout = EcsIn,
+          .oper = EcsOptional,
+        },
+        {
           .first.id = ecs_id(Uses),
           .second.id = it->entities[i],
           .inout = EcsInOutNone,
@@ -583,7 +599,8 @@ static void CompileShaders(ecs_iter_t* it) {
 
       bool type_matches = false;
       const EcsPrimitive* primitive = ecs_get(it->world, component, EcsPrimitive);
-      switch (uniform->type) {
+      if (primitive) {
+        switch (uniform->type) {
         case GL_FLOAT:
           type_matches = primitive->kind == EcsF32;
           *ecs_uniform_type = GLI_FLOAT;
@@ -598,6 +615,7 @@ static void CompileShaders(ecs_iter_t* it) {
           break;
         default:
           break;
+        }
       }
 
       if (!type_matches) {
@@ -643,7 +661,7 @@ static void CompileShaders(ecs_iter_t* it) {
             *ecs_uniform_type = GLI_MAT4;
             break;
           default:
-            assert(false);
+            break;
         }
       }
 
@@ -706,7 +724,10 @@ static void CompileShaders(ecs_iter_t* it) {
 static void PreRenderFrame(ecs_iter_t* it) {
   const ClearColor* clear_color = ecs_field(it, ClearColor, 0);
   Camera2D* camera_2d = ecs_field(it, Camera2D, 1);
-  Camera3D* camera_3d = ecs_field(it, Camera3D, 2);
+  const Position2D* camera_2d_position = ecs_field(it, Position2D, 2);
+  Camera3D* camera_3d = ecs_field(it, Camera3D, 3);
+  const Position3D* camera_3d_position = ecs_field(it, Position3D, 4);
+  const Rotation3D* camera_3d_rotation = ecs_field(it, Rotation3D, 5);
 
   if (camera_2d) {
     // Compute 2D projection matrix.
@@ -724,10 +745,12 @@ static void PreRenderFrame(ecs_iter_t* it) {
     );
 
     // Compute 2D view matrix.
-    vkm_vec2 offset_2d;
-    vkm_invert(&camera_2d->position, &offset_2d);
     camera_2d->view = CVKM_MAT4_IDENTITY;
-    vkm_translate(&camera_2d->view, &offset_2d);
+    if (camera_2d_position) {
+      vkm_vec2 offset_2d;
+      vkm_invert(camera_2d_position, &offset_2d);
+      vkm_translate(&camera_2d->view, &offset_2d);
+    }
   }
 
   if (camera_3d) {
@@ -741,10 +764,20 @@ static void PreRenderFrame(ecs_iter_t* it) {
     );
 
     // Compute 3D view matrix.
-    vkm_vec3 offset_3d;
-    vkm_invert(&camera_3d->position, &offset_3d);
     camera_3d->view = CVKM_MAT4_IDENTITY;
-    vkm_translate(&camera_3d->view, &offset_3d);
+    if (camera_3d_rotation) {
+      vkm_quat conjugate;
+      vkm_quat_conjugate(camera_3d_rotation, &conjugate);
+      vkm_mat4 rotation;
+      vkm_quat_to_mat4(&conjugate, &rotation);
+      vkm_mat4_mul_rotation(&camera_3d->view, &rotation, &camera_3d->view);
+    }
+
+    if (camera_3d_position) {
+      vkm_vec3 offset_3d;
+      vkm_invert(camera_3d_position, &offset_3d);
+      vkm_translate(&camera_3d->view, &offset_3d);
+    }
   }
 
 #ifdef GLI_LINUX
@@ -840,7 +873,9 @@ static void Render(ecs_iter_t* it) {
 
       const Rotation2D* rotations_2d = ecs_field(&rendered_entities_it, Rotation2D, 1);
       const Rotation3D* rotations_3d = ecs_field(&rendered_entities_it, Rotation3D, 2);
-      const Mesh* mesh = ecs_field(&rendered_entities_it, Mesh, 5);
+      const Scale2D* scales_2d = ecs_field(&rendered_entities_it, Scale2D, 3);
+      const Scale3D* scales_3d = ecs_field(&rendered_entities_it, Scale3D, 4);
+      const Mesh* mesh = ecs_field(&rendered_entities_it, Mesh, 7);
       const void* uniform_components[GLI_MAX_UNIFORMS] = { 0 };
       for (int j = 0; j < shader_program->uniforms_count; j++) {
         const int8_t field_index = (int8_t)(j + GLI_SHADER_QUERY_TERMS);
@@ -863,14 +898,22 @@ static void Render(ecs_iter_t* it) {
           if (rotations_2d) {
             vkm_rotate(&built_ins.model, rotations_2d[j], &(vkm_vec3){ { 0.0f, 0.0f, 1.0f } });
           }
+
+          if (scales_2d) {
+            vkm_scale(&built_ins.model, &(vkm_vec3){ { scales_2d[j].x, scales_2d[j].y, 1.0f } });
+          }
         } else {
-          const Position3D* position = (Position3D*)positions + i;
+          const Position3D* position = (Position3D*)positions + j;
           vkm_translate(&built_ins.model, position);
 
           if (rotations_3d) {
             vkm_mat4 rotation;
             vkm_quat_to_mat4(rotations_3d + j, &rotation);
             vkm_mat4_mul_rotation(&built_ins.model, &rotation, &built_ins.model);
+          }
+
+          if (scales_3d) {
+            vkm_scale(&built_ins.model, scales_3d + j);
           }
         }
 
@@ -935,9 +978,9 @@ static void Render(ecs_iter_t* it) {
         }
 
         if (mesh->index_buffer) {
-          glDrawElements(GL_TRIANGLES, mesh->indices_count, GL_UNSIGNED_INT, NULL);
+          glDrawElements(mesh->primitive - 1, mesh->indices_count, GL_UNSIGNED_INT, NULL);
         } else {
-          glDrawArrays(GL_TRIANGLES, 0, mesh->vertices_count);
+          glDrawArrays(mesh->primitive - 1, 0, mesh->vertices_count);
         }
       }
     }
@@ -1028,14 +1071,10 @@ void glitchImport(ecs_world_t* world) {
   ECS_COMPONENT_DEFINE(world, ShaderProgramSource);
   ECS_COMPONENT_DEFINE(world, ShaderProgram);
   ECS_COMPONENT_DEFINE(world, Camera2D);
+  ecs_add_pair(world, ecs_id(Camera2D), EcsWith, ecs_id(Position2D));
   ecs_struct(world, {
     .entity = ecs_id(Camera2D),
     .members = {
-      {
-        .name = "position",
-        .type = ecs_id(Position2D),
-        .offset = offsetof(Camera2D, position),
-      },
       {
         .name = "view",
         .type = ecs_id(vkm_mat4),
@@ -1054,14 +1093,11 @@ void glitchImport(ecs_world_t* world) {
     },
   });
   ECS_COMPONENT_DEFINE(world, Camera3D);
+  ecs_add_pair(world, ecs_id(Camera3D), EcsWith, ecs_id(Position3D));
+  ecs_add_pair(world, ecs_id(Camera3D), EcsWith, ecs_id(Rotation3D));
   ecs_struct(world, {
     .entity = ecs_id(Camera3D),
     .members = {
-      {
-        .name = "position",
-        .type = ecs_id(Position3D),
-        .offset = offsetof(Camera3D, position),
-      },
       {
         .name = "view",
         .type = ecs_id(vkm_mat4),
@@ -1330,6 +1366,7 @@ void glitchImport(ecs_world_t* world) {
 
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
+  glEnable(GL_PROGRAM_POINT_SIZE);
 
   GLI_LOAD_PROC_ADDRESS(glCreateShader);
   GLI_LOAD_PROC_ADDRESS(glDeleteShader);
@@ -1385,8 +1422,11 @@ void glitchImport(ecs_world_t* world) {
   });
   ECS_SYSTEM(world, PreRenderFrame, EcsPreStore,
     [in] ?ClearColor(ClearColor),
-    [inout] ?Camera2D(Camera2D),
-    [inout] ?Camera3D(Camera3D),
+    [inout] ?Camera2D($),
+    [in] ?cvkm.Position2D(Camera2D),
+    [inout] ?Camera3D($),
+    [in] ?cvkm.Position3D(Camera3D),
+    [in] ?cvkm.Rotation3D(Camera3D),
   );
   ECS_SYSTEM(world, Render, EcsOnStore, [in] ShaderProgram, [in] ?Camera2D(Camera2D), [in] ?Camera3D(Camera3D));
   ECS_SYSTEM(world, PostRenderFrame, EcsPostFrame, 0);
@@ -1399,6 +1439,8 @@ void glitchImport(ecs_world_t* world) {
   glBindBuffer(GL_UNIFORM_BUFFER, built_ins_uniform_buffer);
   glBufferData(GL_UNIFORM_BUFFER, sizeof(built_ins_t), NULL, GL_STREAM_DRAW);
   glBindBufferRange(GL_UNIFORM_BUFFER, 0, built_ins_uniform_buffer, 0, sizeof(built_ins_t));
+
+  glGenVertexArrays(1, &attributeless_vertex_array);
 }
 
 #ifndef _MSC_VER
