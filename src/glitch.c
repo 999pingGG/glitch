@@ -938,38 +938,38 @@ static void Render(ecs_iter_t* it) {
               glUniform1fv(shader_program->uniforms[k].location, 1, (GLfloat*)uniform_components[k] + j);
               break;
             case GLI_IVEC2:
-              glUniform2iv(shader_program->uniforms[k].location, 1, (GLint*)uniform_components[k] + j);
+              glUniform2iv(shader_program->uniforms[k].location, 1, (GLint*)((vkm_ivec2*)uniform_components[k] + j));
               break;
             case GLI_UVEC2:
-              glUniform2uiv(shader_program->uniforms[k].location, 1, (GLuint*)uniform_components[k] + j);
+              glUniform2uiv(shader_program->uniforms[k].location, 1, (GLuint*)((vkm_uvec2*)uniform_components[k] + j));
               break;
             case GLI_VEC2:
-              glUniform2fv(shader_program->uniforms[k].location, 1, (GLfloat*)uniform_components[k] + j);
+              glUniform2fv(shader_program->uniforms[k].location, 1, (GLfloat*)((vkm_vec2*)uniform_components[k] + j));
               break;
             case GLI_IVEC3:
-              glUniform3iv(shader_program->uniforms[k].location, 1, (GLint*)uniform_components[k] + j);
+              glUniform3iv(shader_program->uniforms[k].location, 1, (GLint*)((vkm_ivec3*)uniform_components[k] + j));
               break;
             case GLI_UVEC3:
-              glUniform3uiv(shader_program->uniforms[k].location, 1, (GLuint*)uniform_components[k] + j);
+              glUniform3uiv(shader_program->uniforms[k].location, 1, (GLuint*)((vkm_uvec3*)uniform_components[k] + j));
               break;
             case GLI_VEC3:
-              glUniform3fv(shader_program->uniforms[k].location, 1, (GLfloat*)uniform_components[k] + j);
+              glUniform3fv(shader_program->uniforms[k].location, 1, (GLfloat*)((vkm_vec3*)uniform_components[k] + j));
               break;
             case GLI_IVEC4:
-              glUniform4iv(shader_program->uniforms[k].location, 1, (GLint*)uniform_components[k] + j);
+              glUniform4iv(shader_program->uniforms[k].location, 1, (GLint*)((vkm_ivec4*)uniform_components[k] + j));
               break;
             case GLI_UVEC4:
-              glUniform4uiv(shader_program->uniforms[k].location, 1, (GLuint*)uniform_components[k] + j);
+              glUniform4uiv(shader_program->uniforms[k].location, 1, (GLuint*)((vkm_uvec4*)uniform_components[k] + j));
               break;
             case GLI_VEC4:
-              glUniform4fv(shader_program->uniforms[k].location, 1, (GLfloat*)uniform_components[k] + j);
+              glUniform4fv(shader_program->uniforms[k].location, 1, (GLfloat*)((vkm_vec4*)uniform_components[k] + j));
               break;
             case GLI_MAT4:
               glUniformMatrix4fv(
                 shader_program->uniforms[k].location,
                 1,
                 GL_FALSE,
-                (GLfloat*)uniform_components[k] + j
+                (GLfloat*)((vkm_mat4*)uniform_components[k] + j)
               );
               break;
             default:
