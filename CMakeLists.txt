@@ -25,7 +25,6 @@ if(MSVC)
   set_source_files_properties(libs/flecs/flecs.c libs/flecs/flecs.h PROPERTIES COMPILE_FLAGS /W0)
 else()
   target_compile_options(tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
-  target_compile_definitions(tests PRIVATE MUNIT_NO_FORK)
 endif()
 
 if(UNIX AND NOT ANDROID)
