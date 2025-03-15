@@ -697,6 +697,7 @@ static void CompileShaders(ecs_iter_t* it) {
       assert(shader_program.uniforms_count >= 0);
 
       if (shader_program.uniforms_count > 0) {
+        free(shader_program.uniforms[j - skipped_uniforms].name);
         memmove(
           shader_program.uniforms + j - skipped_uniforms,
           shader_program.uniforms + j - skipped_uniforms + 1,
