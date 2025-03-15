@@ -1023,14 +1023,14 @@ static LRESULT CALLBACK window_proc(
       PostQuitMessage(0);
       return 0;
     case WM_SIZE:
-      ecs_world_t* world = GetWindowLongPtr(handle, GWLP_USERDATA);
+      ecs_world_t* world = (ecs_world_t*)GetWindowLongPtr(handle, GWLP_USERDATA);
       if (!world) {
         return 0;
       }
 
-      GLitchWindow* window = ecs_singleton_ensure(world, GLitchWindow);
+      GLitchWindow* window = ecs_ensure_id(world, ecs_id(Window), ecs_id(Window));
       glViewport(0, 0, window->size.x = LOWORD(long_param), window->size.y = HIWORD(long_param));
-      ecs_singleton_modified(world, GLitchWindow);
+      ecs_modified_id(world, ecs_id(Window), ecs_id(Window));
       return 0;
     default:
       return DefWindowProc(handle, message, word_param, long_param);
@@ -1231,7 +1231,7 @@ static void OnSetWindow(ecs_iter_t* it) {
       MessageBox(NULL, "Failed to create window.", "Error", MB_OK);
       return;
     }
-    SetWindowLongPtr(window->window_handle, GWLP_USERDATA, it->world);
+    SetWindowLongPtr(window->window_handle, GWLP_USERDATA, (LONG_PTR)it->world);
 
     window->device_context_handle = GetDC(window->window_handle);
 

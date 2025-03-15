@@ -99,6 +99,7 @@ int main(const int argc, char** argv) {
   ECS_SYSTEM(world, Rotate, EcsOnUpdate, [inout] cvkm.Rotation2D || cvkm.Rotation3D, [in] ?TimeScale, [none] Rotating);
 
   ecs_set_id(world, ecs_id(Window), ecs_id(Window), sizeof(GLitchWindow), &(GLitchWindow){
+    .name = "GLitch tests",
     .size = { { 800, 600 } },
   });
 

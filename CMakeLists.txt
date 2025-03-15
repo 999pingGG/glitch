@@ -21,6 +21,8 @@ endif()
 
 if(MSVC)
   target_compile_options(tests PRIVATE /W4 /WX)
+  # Because we don't control those.
+  set_source_files_properties(libs/flecs/flecs.c libs/flecs/flecs.h PROPERTIES COMPILE_FLAGS /W0)
 else()
   target_compile_options(tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
   target_compile_definitions(tests PRIVATE MUNIT_NO_FORK)
