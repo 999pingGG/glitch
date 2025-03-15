@@ -98,6 +98,10 @@ int main(const int argc, char** argv) {
   ECS_SYSTEM(world, Move, EcsOnUpdate, [out] cvkm.Position2D, [in] Lifetime);
   ECS_SYSTEM(world, Rotate, EcsOnUpdate, [inout] cvkm.Rotation2D || cvkm.Rotation3D, [in] ?TimeScale, [none] Rotating);
 
+  ecs_set_id(world, ecs_id(Window), ecs_id(Window), sizeof(GLitchWindow), &(GLitchWindow){
+    .size = { { 800, 600 } },
+  });
+
   // Equilateral triangle
   static const float triangle_vertices[] = {
     // Position

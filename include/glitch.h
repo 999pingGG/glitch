@@ -12,12 +12,48 @@
 #define GLI_LINUX
 #endif
 
-#ifdef GLI_WINDOWS
+#ifdef GLI_LINUX
+#include <X11/Xlib.h>
+#include <GL/gl.h>
+#include <GL/glx.h>
+
+typedef GLXContext(*glXCreateContextAttribsARBProc)(
+  Display* display,
+  GLXFBConfig config,
+  GLXContext share_context,
+  Bool direct,
+  const int* attrib_list
+);
+
+// Huh, X11 already took the Window identifier.
+typedef struct GLitchWindow {
+  GLXContext context;
+  Display* display;
+  Window window;
+  Atom wm_delete;
+  char* name;
+  vkm_usvec2 size;
+} GLitchWindow;
+#elif defined(GLI_WINDOWS)
 // Window's OpenGL header is ancient (version 1.1).
 // So we need to provide some stuff here by ourselves.
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
 #include <Windows.h>
+
+typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC)(
+  HDC device_context_handle,
+  HGLRC gl_rendering_context_handle,
+  const int* attribute_list
+);
+
+typedef struct GLitchWindow {
+  HGLRC context;
+  HWND window_handle;
+  HDC device_context_handle;
+  char* name;
+  vkm_usvec2 size;
+} GLitchWindow;
 
 typedef char GLchar;
 typedef intptr_t GLsizeiptr;
@@ -52,6 +88,8 @@ typedef intptr_t GLintptr;
 #define GL_UNSIGNED_INT_VEC4 0x8DC8
 #define GL_FLOAT_MAT4 0x8B5C
 #define GL_PROGRAM_POINT_SIZE 0x8642
+#else
+#error Unsupported platform.
 #endif
 
 #include <GL/gl.h>
@@ -157,6 +195,7 @@ typedef struct Camera3D {
 typedef vkm_vec4 Color;
 typedef Color ClearColor;
 
+extern ECS_COMPONENT_DECLARE(Window);
 extern ECS_COMPONENT_DECLARE(MeshData);
 extern ECS_COMPONENT_DECLARE(Mesh);
 extern ECS_COMPONENT_DECLARE(ShaderProgramSource);
