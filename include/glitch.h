@@ -12,6 +12,10 @@
 #define GLI_LINUX
 #endif
 
+#ifdef __EMSCRIPTEN__
+#define GLI_EMSCRIPTEN
+#endif
+
 #ifdef GLI_LINUX
 #include <X11/Xlib.h>
 #include <GL/gl.h>
@@ -88,6 +92,15 @@ typedef intptr_t GLintptr;
 #define GL_UNSIGNED_INT_VEC4 0x8DC8
 #define GL_FLOAT_MAT4 0x8B5C
 #define GL_PROGRAM_POINT_SIZE 0x8642
+#elif defined(GLI_EMSCRIPTEN)
+#include <emscripten/html5.h>
+#include <GLES3/gl3.h>
+
+typedef struct GLitchWindow {
+  EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context;
+  char* name;
+  vkm_usvec2 size;
+} GLitchWindow;
 #else
 #error Unsupported platform.
 #endif

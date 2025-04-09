@@ -7,6 +7,8 @@
 #include <flecs.h>
 #include <glitch.h>
 
+#define TARGET_FPS 60
+
 typedef float Lifetime;
 static ECS_COMPONENT_DECLARE(Lifetime);
 typedef float TimeScale;
@@ -73,6 +75,20 @@ static void Rotate(ecs_iter_t* it) {
       vkm_mul(rotation, &delta, rotation);
     }
   }
+}
+
+static bool emscripten_main_loop(const double time, void* world) {
+  static double last_time = 0.0;
+  const double delta_time = last_time <= 0.0 ? 1.0 / TARGET_FPS : (time - last_time) / 1000.0;
+  last_time = time;
+
+  const bool quit = !ecs_progress(world, (ecs_ftime_t)delta_time);
+  if (quit) {
+    ecs_fini(world);
+    return false;
+  }
+
+  return true;
 }
 
 int main(const int argc, char** argv) {
@@ -309,7 +325,7 @@ int main(const int argc, char** argv) {
     "out vec4 fragment_color;\n"
     "\n"
     "uniform vec4 entityColor;\n"
-    "uniform float does_not_exist = 1.0;\n"
+    "uniform float does_not_exist;\n"
     "uniform float entityTimeScale;\n"
     "uniform vec4 Tint;\n"
     "uniform int unused;\n"
@@ -320,7 +336,7 @@ int main(const int argc, char** argv) {
     "    * light_intensity\n"
     "    * Tint\n"
     "    * (sin(time * entityTimeScale) * 0.5 + 0.5)\n"
-    "    * does_not_exist;\n"
+    "    + does_not_exist;\n"
     "}\n";
 
   static const char* vertex_shader_source_3d =
@@ -418,12 +434,16 @@ int main(const int argc, char** argv) {
     ),
   });
 
+#ifdef GLI_EMSCRIPTEN
+  emscripten_request_animation_frame_loop(emscripten_main_loop, world);
+#else
   ecs_app_run(world, &(ecs_app_desc_t){
-    .target_fps = 60,
+    .target_fps = TARGET_FPS,
     .frames = 0,
     .enable_rest = true,
     .enable_stats = true,
   });
 
   ecs_fini(world);
+#endif
 }

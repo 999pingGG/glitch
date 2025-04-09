@@ -48,6 +48,7 @@ static const char* built_in_names[] = {
 static GLuint built_ins_uniform_buffer;
 #pragma endregion
 
+#if defined(GLI_LINUX) || defined (GLI_WINDOWS)
 typedef GLuint (*glCreateShaderProc)(GLenum shaderType);
 static glCreateShaderProc glCreateShader;
 typedef void (*glDeleteShaderProc)(GLuint shader);
@@ -153,6 +154,7 @@ typedef void (*glUniform4uivProc)(GLint location, GLsizei count, const GLuint *v
 static glUniform4uivProc glUniform4uiv;
 typedef void (*glUniformMatrix4fvProc)(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
 static glUniformMatrix4fvProc glUniformMatrix4fv;
+#endif
 
 ECS_COMPONENT_DECLARE(Window);
 ECS_COMPONENT_DECLARE(MeshData);
@@ -292,7 +294,12 @@ ECS_CTOR(ClearColor, ptr, {
 static GLuint compile_shader(const GLenum type, const char* source) {
   const GLuint shader = glCreateShader(type);
   static const char* shader_copypasta =
+#ifdef GLI_EMSCRIPTEN
+    "#version 300 es\n"
+    "precision highp float;\n"
+#else
     "#version 330 core\n"
+#endif
     "layout(std140) uniform built_ins {\n"
     "  mat4 model, view, projection;\n"
     "  vec2 resolution;\n"
@@ -578,7 +585,7 @@ static void CompileShaders(ecs_iter_t* it) {
 
       const ecs_entity_t component = ecs_lookup_symbol(it->world, component_name, false, false);
       if (!component) {
-        printf("Component %s not found.\n", component_name);
+        fprintf(stderr, "Component %s not found.\n", component_name);
         goto invalid_component;
       }
 
@@ -784,7 +791,7 @@ static void PreRenderFrame(ecs_iter_t* it) {
         break;
     }
   }
-#else
+#elif defined(GLI_WINDOWS)
   MSG message;
   while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
     if (message.message == WM_QUIT) {
@@ -979,8 +986,10 @@ static void PostRenderFrame(ecs_iter_t* it) {
   const GLitchWindow* window = ecs_field(it, GLitchWindow, 0);
 #ifdef GLI_LINUX
   glXSwapBuffers(window->display, window->window);
-#else
+#elif defined(GLI_WINDOWS)
   SwapBuffers(window->device_context_handle);
+#elif defined(GLI_EMSCRIPTEN)
+  (void)window;
 #endif
 
   GLenum error;
@@ -991,10 +1000,11 @@ static void PostRenderFrame(ecs_iter_t* it) {
 
 #ifdef GLI_LINUX
 #define gli_get_proc_address(fun) glXGetProcAddressARB((const GLubyte*)#fun)
-#else
+#elif defined(GLI_WINDOWS)
 #define gli_get_proc_address(fun) wglGetProcAddress((LPCSTR)#fun)
 #endif
 
+#if defined(GLI_LINUX) || defined (GLI_WINDOWS)
 #define GLI_LOAD_PROC_ADDRESS(fun) do {\
   fun = (fun##Proc)gli_get_proc_address(fun);\
   if (!fun){\
@@ -1002,6 +1012,9 @@ static void PostRenderFrame(ecs_iter_t* it) {
     return;\
   }\
 } while (false)
+#elif defined(GLI_EMSCRIPTEN)
+#define GLI_LOAD_PROC_ADDRESS(fun) ((void)0)
+#endif
 
 #ifndef _MSC_VER
 #pragma GCC diagnostic push
@@ -1036,6 +1049,10 @@ static LRESULT CALLBACK window_proc(
       return DefWindowProc(handle, message, word_param, long_param);
   }
 }
+#elif defined(GLI_EMSCRIPTEN)
+EM_JS(void, set_title, (const char* str), {
+  document.title = UTF8ToString(str);
+})
 #endif
 
 static void OnSetWindow(ecs_iter_t* it) {
@@ -1058,7 +1075,7 @@ static void OnSetWindow(ecs_iter_t* it) {
       XFlush(window->display);
       glViewport(0, 0, window->size.x, window->size.y);
     }
-#else
+#elif defined(GLI_WINDOWS)
     SetWindowText(window->window_handle, window->name ? window->name : default_window_name);
 
     RECT rect;
@@ -1083,7 +1100,7 @@ static void OnSetWindow(ecs_iter_t* it) {
           | SWP_NOSENDCHANGING
       );
       glViewport(0, 0, window->size.x, window->size.y);
-    } 
+    }
 #endif
   } else {
 #ifdef GLI_LINUX
@@ -1197,7 +1214,7 @@ static void OnSetWindow(ecs_iter_t* it) {
 
     // Make the context current
     glXMakeCurrent(window->display, window->window, window->context);
-#else
+#elif defined(GLI_WINDOWS)
     static const char* class_name = "GLitchWindowClass";
 
     if (!RegisterClass(
@@ -1296,11 +1313,37 @@ static void OnSetWindow(ecs_iter_t* it) {
 
     wglMakeCurrent(window->device_context_handle, window->context);
     wglDeleteContext(dummy_context_handle);
+#elif defined(GLI_EMSCRIPTEN)
+    window->context = emscripten_webgl_create_context("#canvas", &(EmscriptenWebGLContextAttributes){
+      .alpha = 0,
+      .depth = 1,
+      .stencil = 0,
+      .antialias = 1,
+      .premultipliedAlpha = 1,
+      .preserveDrawingBuffer = false,
+      .powerPreference = EM_WEBGL_POWER_PREFERENCE_DEFAULT,
+      .failIfMajorPerformanceCaveat = false,
+      .majorVersion = 2,
+      .minorVersion = 0,
+      .enableExtensionsByDefault = 1,
+      .explicitSwapControl = 0,
+      .proxyContextToMainThread = EMSCRIPTEN_WEBGL_CONTEXT_PROXY_DISALLOW,
+      .renderViaOffscreenBackBuffer = false,
+    });
+    emscripten_webgl_make_context_current(window->context);
+#endif
+
+#ifdef GLI_EMSCRIPTEN
+    set_title(window->name ? window->name : default_window_name);
+    emscripten_set_canvas_element_size("#canvas", window->size.x, window->size.y);
+    glViewport(0, 0, window->size.x, window->size.y);
 #endif
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
+#ifndef GLI_EMSCRIPTEN
     glEnable(GL_PROGRAM_POINT_SIZE);
+#endif
 
     GLI_LOAD_PROC_ADDRESS(glCreateShader);
     GLI_LOAD_PROC_ADDRESS(glDeleteShader);
@@ -1360,11 +1403,13 @@ static void OnRemoveWindow(ecs_iter_t* it) {
   glXDestroyContext(window->display, window->context);
   XDestroyWindow(window->display, window->window);
   XCloseDisplay(window->display);
-#else
+#elif defined(GLI_WINDOWS)
   wglMakeCurrent(NULL, NULL);
   wglDeleteContext(window->context);
   ReleaseDC(window->window_handle, window->device_context_handle);
   DestroyWindow(window->window_handle);
+#elif defined(GLI_EMSCRIPTEN)
+  (void)window;
 #endif
 }
 
