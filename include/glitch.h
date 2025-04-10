@@ -39,7 +39,7 @@ typedef struct GLitchWindow {
   vkm_usvec2 size;
 } GLitchWindow;
 #elif defined(GLI_WINDOWS)
-// Window's OpenGL header is ancient (version 1.1).
+// Windows' OpenGL header is ancient (version 1.1).
 // So we need to provide some stuff here by ourselves.
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN

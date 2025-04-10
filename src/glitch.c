@@ -99,13 +99,13 @@ typedef GLint (*glGetUniformLocationProc)(GLuint program, const GLchar* name);
 static glGetUniformLocationProc glGetUniformLocation;
 typedef void (*glGenVertexArraysProc)(GLsizei n, GLuint* arrays);
 static glGenVertexArraysProc glGenVertexArrays;
-typedef void (*glDeleteVertexArraysProc)(GLsizei n, const GLuint *arrays);
+typedef void (*glDeleteVertexArraysProc)(GLsizei n, const GLuint* arrays);
 static glDeleteVertexArraysProc glDeleteVertexArrays;
 typedef void (*glBindVertexArrayProc)(GLuint array);
 static glBindVertexArrayProc glBindVertexArray;
 typedef void (*glGenBuffersProc)(GLsizei n, GLuint* buffers);
 static glGenBuffersProc glGenBuffers;
-typedef void (*glDeleteBuffersProc)(GLsizei n, const GLuint *buffers);
+typedef void (*glDeleteBuffersProc)(GLsizei n, const GLuint* buffers);
 static glDeleteBuffersProc glDeleteBuffers;
 typedef void (*glBindBufferProc)(GLenum target, GLuint buffer);
 static glBindBufferProc glBindBuffer;
@@ -124,35 +124,35 @@ typedef void (*glVertexAttribIPointerProc)(GLuint index, GLint size, GLenum type
 static glVertexAttribIPointerProc glVertexAttribIPointer;
 typedef void (*glEnableVertexAttribArrayProc)(GLuint index);
 static glEnableVertexAttribArrayProc glEnableVertexAttribArray;
-typedef void (*glBufferDataProc)(GLenum target, GLsizeiptr size, const void *data, GLenum usage);
+typedef void (*glBufferDataProc)(GLenum target, GLsizeiptr size, const void* data, GLenum usage);
 static glBufferDataProc glBufferData;
 typedef void (*glUseProgramProc)(GLuint program);
 static glUseProgramProc glUseProgram;
-typedef void (*glUniform1fvProc)(GLint location, GLsizei count, const GLfloat *value);
+typedef void (*glUniform1fvProc)(GLint location, GLsizei count, const GLfloat* value);
 static glUniform1fvProc glUniform1fv;
-typedef void (*glUniform2fvProc)(GLint location, GLsizei count, const GLfloat *value);
+typedef void (*glUniform2fvProc)(GLint location, GLsizei count, const GLfloat* value);
 static glUniform2fvProc glUniform2fv;
-typedef void (*glUniform3fvProc)(GLint location, GLsizei count, const GLfloat *value);
+typedef void (*glUniform3fvProc)(GLint location, GLsizei count, const GLfloat* value);
 static glUniform3fvProc glUniform3fv;
-typedef void (*glUniform4fvProc)(GLint location, GLsizei count, const GLfloat *value);
+typedef void (*glUniform4fvProc)(GLint location, GLsizei count, const GLfloat* value);
 static glUniform4fvProc glUniform4fv;
-typedef void (*glUniform1ivProc)(GLint location, GLsizei count, const GLint *value);
+typedef void (*glUniform1ivProc)(GLint location, GLsizei count, const GLint* value);
 static glUniform1ivProc glUniform1iv;
-typedef void (*glUniform2ivProc)(GLint location, GLsizei count, const GLint *value);
+typedef void (*glUniform2ivProc)(GLint location, GLsizei count, const GLint* value);
 static glUniform2ivProc glUniform2iv;
-typedef void (*glUniform3ivProc)(GLint location, GLsizei count, const GLint *value);
+typedef void (*glUniform3ivProc)(GLint location, GLsizei count, const GLint* value);
 static glUniform3ivProc glUniform3iv;
-typedef void (*glUniform4ivProc)(GLint location, GLsizei count, const GLint *value);
+typedef void (*glUniform4ivProc)(GLint location, GLsizei count, const GLint* value);
 static glUniform4ivProc glUniform4iv;
-typedef void (*glUniform1uivProc)(GLint location, GLsizei count, const GLuint *value);
+typedef void (*glUniform1uivProc)(GLint location, GLsizei count, const GLuint* value);
 static glUniform1uivProc glUniform1uiv;
-typedef void (*glUniform2uivProc)(GLint location, GLsizei count, const GLuint *value);
+typedef void (*glUniform2uivProc)(GLint location, GLsizei count, const GLuint* value);
 static glUniform2uivProc glUniform2uiv;
-typedef void (*glUniform3uivProc)(GLint location, GLsizei count, const GLuint *value);
+typedef void (*glUniform3uivProc)(GLint location, GLsizei count, const GLuint* value);
 static glUniform3uivProc glUniform3uiv;
-typedef void (*glUniform4uivProc)(GLint location, GLsizei count, const GLuint *value);
+typedef void (*glUniform4uivProc)(GLint location, GLsizei count, const GLuint* value);
 static glUniform4uivProc glUniform4uiv;
-typedef void (*glUniformMatrix4fvProc)(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
+typedef void (*glUniformMatrix4fvProc)(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value);
 static glUniformMatrix4fvProc glUniformMatrix4fv;
 #endif
 
@@ -477,7 +477,7 @@ static void CompileShaders(ecs_iter_t* it) {
 
       uniform->name = strdup(name_buffer);
       uniform->location = glGetUniformLocation(shader_program.program, name_buffer);
-      next:;
+    next:;
     }
 
     // Assuming we always insert all the built-in uniforms into the shader code.
@@ -593,20 +593,20 @@ static void CompileShaders(ecs_iter_t* it) {
       const EcsPrimitive* primitive = ecs_get(it->world, component, EcsPrimitive);
       if (primitive) {
         switch (uniform->type) {
-        case GL_FLOAT:
-          type_matches = primitive->kind == EcsF32;
-          *ecs_uniform_type = GLI_FLOAT;
-          break;
-        case GL_INT:
-          type_matches = primitive->kind == EcsI32;
-          *ecs_uniform_type = GLI_INT;
-          break;
-        case GL_UNSIGNED_INT:
-          type_matches = primitive->kind == EcsU32;
-          *ecs_uniform_type = GLI_UINT;
-          break;
-        default:
-          break;
+          case GL_FLOAT:
+            type_matches = primitive->kind == EcsF32;
+            *ecs_uniform_type = GLI_FLOAT;
+            break;
+          case GL_INT:
+            type_matches = primitive->kind == EcsI32;
+            *ecs_uniform_type = GLI_INT;
+            break;
+          case GL_UNSIGNED_INT:
+            type_matches = primitive->kind == EcsU32;
+            *ecs_uniform_type = GLI_UINT;
+            break;
+          default:
+            break;
         }
       }
 
@@ -711,7 +711,7 @@ static void CompileShaders(ecs_iter_t* it) {
 
     ecs_set_id(it->world, it->entities[i], ecs_id(ShaderProgram), sizeof(ShaderProgram), &shader_program);
 
-    cleanup:
+  cleanup:
     glDeleteShader(vertex_shader);
     glDeleteShader(fragment_shader);
   }
@@ -1205,13 +1205,13 @@ static void OnSetWindow(ecs_iter_t* it) {
       best_config,
       0,
       True,
-      (int[]) {
-      GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
+      (int[]){
+        GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
         GLX_CONTEXT_MINOR_VERSION_ARB, 3,
         GLX_CONTEXT_PROFILE_MASK_ARB,
         GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
         None,
-    }
+      }
     );
     if (!window->context) {
       fprintf(stderr, "Failed to create OpenGL 3.3 context.\n");
@@ -1224,13 +1224,13 @@ static void OnSetWindow(ecs_iter_t* it) {
     static const char* class_name = "GLitchWindowClass";
 
     if (!RegisterClass(
-      &(WNDCLASS) {
-      .style = CS_OWNDC,
+      &(WNDCLASS){
+        .style = CS_OWNDC,
         .lpfnWndProc = window_proc,
         .hInstance = GetModuleHandle(NULL),
         .hCursor = LoadCursor(NULL, IDC_ARROW),
         .lpszClassName = class_name,
-    }
+      }
     )) {
       MessageBox(NULL, "Failed to register window class.", "Error", MB_OK);
       return;
@@ -1303,13 +1303,13 @@ static void OnSetWindow(ecs_iter_t* it) {
     window->context = wglCreateContextAttribsARB(
       window->device_context_handle,
       0,
-      (int[]) {
-      WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+      (int[]){
+        WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
         WGL_CONTEXT_MINOR_VERSION_ARB, 3,
         WGL_CONTEXT_PROFILE_MASK_ARB,
         WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
         0,
-    }
+      }
     );
 
     if (!window->context) {
