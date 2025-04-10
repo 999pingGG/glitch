@@ -77,6 +77,7 @@ static void Rotate(ecs_iter_t* it) {
   }
 }
 
+#ifdef GLI_EMSCRIPTEN
 static bool emscripten_main_loop(const double time, void* world) {
   static double last_time = 0.0;
   const double delta_time = last_time <= 0.0 ? 1.0 / TARGET_FPS : (time - last_time) / 1000.0;
@@ -90,6 +91,7 @@ static bool emscripten_main_loop(const double time, void* world) {
 
   return true;
 }
+#endif
 
 int main(const int argc, char** argv) {
   ecs_world_t* world = ecs_init_w_args(argc, argv);
