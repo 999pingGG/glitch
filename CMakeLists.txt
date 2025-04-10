@@ -27,7 +27,6 @@ set(DISABLE_WARNINGS_LIST
 
 if(MSVC)
   target_compile_options(tests PRIVATE /W4 /WX)
-  # Because we don't control those.
   set_source_files_properties(${DISABLE_WARNINGS_LIST} PROPERTIES COMPILE_FLAGS /W0)
 else()
   target_compile_options(tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
@@ -49,7 +48,7 @@ elseif(WIN32)
   target_link_libraries(tests PRIVATE ws2_32 Opengl32)
 endif()
 
-target_include_directories(tests PRIVATE include libs/flecs libs/cvkm)
+target_include_directories(tests PRIVATE include libs/cvkm libs/flecs)
 
 if(EMSCRIPTEN)
   configure_file(src/index.html ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)
