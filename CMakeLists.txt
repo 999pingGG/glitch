@@ -19,14 +19,27 @@ if(MATH_LIBRARY)
   target_link_libraries(tests PUBLIC ${MATH_LIBRARY})
 endif()
 
+# Because we don't control those.
+set(DISABLE_WARNINGS_LIST
+  libs/flecs/flecs.c
+  libs/flecs/flecs.h
+)
+
 if(MSVC)
   target_compile_options(tests PRIVATE /W4 /WX)
   # Because we don't control those.
-  set_source_files_properties(libs/flecs/flecs.c libs/flecs/flecs.h PROPERTIES COMPILE_FLAGS /W0)
+  set_source_files_properties(${DISABLE_WARNINGS_LIST} PROPERTIES COMPILE_FLAGS /W0)
 else()
   target_compile_options(tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+  set_source_files_properties(${DISABLE_WARNINGS_LIST} PROPERTIES COMPILE_FLAGS -w)
   if(EMSCRIPTEN)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sALLOW_MEMORY_GROWTH=1 --closure 1 -sSTACK_SIZE=1mb")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}
+      -sMIN_WEBGL_VERSION=2
+      -sMAX_WEBGL_VERSION=2
+      -sALLOW_MEMORY_GROWTH=1
+      --closure 1
+      -sSTACK_SIZE=1mb"
+    )
   endif()
 endif()
 

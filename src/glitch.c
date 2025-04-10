@@ -408,7 +408,7 @@ static void MakeMeshes(ecs_iter_t* it) {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->index_buffer);
         glBufferData(
           GL_ELEMENT_ARRAY_BUFFER,
-          sizeof(*mesh_data->indices) * mesh_data->indices_count,
+          (int)sizeof(*mesh_data->indices) * mesh_data->indices_count,
           mesh_data->indices,
           GL_STATIC_DRAW
         );
@@ -695,7 +695,10 @@ static void CompileShaders(ecs_iter_t* it) {
           shader_program.uniforms + j - skipped_uniforms + 1,
           (shader_program.uniforms_count - j + skipped_uniforms) * sizeof(gli_shader_input_data)
         );
-        shader_program.uniforms = realloc(shader_program.uniforms, shader_program.uniforms_count * sizeof(gli_shader_input_data));
+        shader_program.uniforms = realloc(
+          shader_program.uniforms,
+          shader_program.uniforms_count * sizeof(gli_shader_input_data)
+        );
       } else {
         free(shader_program.uniforms);
         shader_program.uniforms = NULL;
@@ -747,6 +750,10 @@ static void PreRenderFrame(ecs_iter_t* it) {
     }
   }
 
+  // This variable is declared here instead of an inner scope to work around a gcc optimizer bug (only happens with -O2
+  // and up) that makes it COMPLETELY IGNORE the call to vkm_quat_conjugate()...
+  // For the record, the bugged compiler I tested is gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
+  vkm_quat conjugate;
   if (camera_3d) {
     // Compute 3D projection matrix.
     vkm_perspective(
@@ -760,7 +767,6 @@ static void PreRenderFrame(ecs_iter_t* it) {
     // Compute 3D view matrix.
     camera_3d->view = CVKM_MAT4_IDENTITY;
     if (camera_3d_rotation) {
-      vkm_quat conjugate;
       vkm_quat_conjugate(camera_3d_rotation, &conjugate);
       vkm_mat4 rotation;
       vkm_quat_to_mat4(&conjugate, &rotation);
