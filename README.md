@@ -17,6 +17,12 @@ The tests need CMake, but they are easy to compile without it.
 Copy `glitch.h` and `glitch.c` to your project. Link against `X11` and `GL` in Linux and against `Opengl32` in Windows.
 Emscripten needs the flags `-sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sALLOW_MEMORY_GROWTH=1`.
 
+## Configuration
+When building for Emscripten, you can `#define GLI_CANVAS_SELECTOR` to change the CSS selector that will be used to get
+the canvas to which we will render. Can be a string literal. `"#canvas"` will be used by default. For example,
+`#define "#game-canvas"` for the element with ID `game-canvas`, `#define ".canvas"` for the element with class
+`canvas`, `#define GLI_CANVAS_SELECTOR some_global_variable` to use a variable (using globals is not recommended), etc.
+
 ## Testing
 Do a standard CMake build to build the tests.
 
