@@ -164,8 +164,7 @@ typedef struct MeshData {
   struct attribute {
     // The type is actually gli_data_type_t
     int8_t type;
-    bool convert_to_float;
-    bool is_normalized;
+    bool normalize;
   } vertex_attributes[GLI_MAX_ATTRIBUTES];
 } MeshData;
 

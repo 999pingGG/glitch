@@ -390,12 +390,12 @@ static void MakeMeshes(ecs_iter_t* it) {
       for (int j = 0; mesh_data->vertex_attributes[j].type && j < GLI_MAX_ATTRIBUTES; j++) {
         const gli_type_info_t info = type_infos[mesh_data->vertex_attributes[j].type];
 
-        if (info.type == GL_FLOAT || mesh_data->vertex_attributes[j].convert_to_float) {
+        if (info.type == GL_FLOAT) {
           glVertexAttribPointer(
             j,
             info.vector_components,
             info.type,
-            mesh_data->vertex_attributes[j].is_normalized,
+            mesh_data->vertex_attributes[j].normalize,
             0,
             (const GLvoid*)buffer_size
           );
